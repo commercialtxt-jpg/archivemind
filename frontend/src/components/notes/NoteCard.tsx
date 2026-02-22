@@ -1,0 +1,64 @@
+import NoteTypeBadge from './NoteTypeBadge';
+import type { NoteSummary } from '../../types';
+
+interface NoteCardProps {
+  note: NoteSummary;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] transition-all duration-150 cursor-pointer
+        ${isActive
+          ? 'bg-card-bg border-border shadow-card-active'
+          : 'bg-transparent border-transparent hover:bg-white/70'
+        }
+      `}
+    >
+      {/* Title + badge row */}
+      <div className="flex items-start gap-2 mb-1">
+        <h3 className="flex-1 font-serif text-[13.5px] font-medium leading-[1.3] text-ink line-clamp-2">
+          {note.title || 'Untitled'}
+        </h3>
+        <NoteTypeBadge type={note.note_type} />
+      </div>
+
+      {/* Excerpt */}
+      {note.body_text && (
+        <p className="text-[12px] leading-[1.5] text-ink-muted line-clamp-2 mb-2">
+          {note.body_text}
+        </p>
+      )}
+
+      {/* Meta row */}
+      <div className="flex items-center gap-3 text-[11px] text-ink-muted">
+        {note.location_name && (
+          <span className="flex items-center gap-1 truncate">
+            <span className="text-[10px]">📍</span>
+            {note.location_name}
+          </span>
+        )}
+        <span className="flex items-center gap-1">
+          <span className="text-[10px]">🕐</span>
+          {formatRelativeTime(note.created_at)}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}

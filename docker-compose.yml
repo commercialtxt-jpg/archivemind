@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: archivemind-db
+    environment:
+      POSTGRES_USER: archivemind
+      POSTGRES_PASSWORD: archivemind_dev
+      POSTGRES_DB: archivemind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
