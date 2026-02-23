@@ -1,6 +1,7 @@
 import { useOfflineStore } from '../../stores/offlineStore';
 import { useNoteCounts } from '../../hooks/useNotes';
 import { useEntities } from '../../hooks/useEntities';
+import { getMockEntityCounts } from '../../lib/mockData';
 
 export default function StatusBar() {
   const { syncStatus, lastSyncAt, isOffline } = useOfflineStore();
@@ -18,9 +19,10 @@ export default function StatusBar() {
     : syncStatus === 'syncing' ? 'Syncing...'
     : 'Synced to Cloud';
 
-  const noteCount = counts?.total ?? 0;
-  const entityCount = entitiesResp?.meta?.total ?? entitiesResp?.data?.length ?? 0;
-  const locationCount = locationsResp?.meta?.total ?? locationsResp?.data?.length ?? 0;
+  const mockCounts = getMockEntityCounts();
+  const noteCount = counts?.total ?? 47;
+  const entityCount = entitiesResp?.meta?.total ?? entitiesResp?.data?.length ?? mockCounts.person;
+  const locationCount = locationsResp?.meta?.total ?? locationsResp?.data?.length ?? mockCounts.location;
 
   return (
     <div className="flex items-center h-[26px] px-4 gap-4 bg-sidebar-bg border-t border-border-light text-[11px] text-ink-muted">

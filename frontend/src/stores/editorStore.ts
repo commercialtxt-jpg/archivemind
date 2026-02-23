@@ -9,7 +9,7 @@ interface EditorState {
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
-  activeNoteId: null,
+  activeNoteId: 'mock-note-1',
   isDirty: false,
 
   setActiveNoteId: (id) => set({ activeNoteId: id, isDirty: false }),

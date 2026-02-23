@@ -6,8 +6,13 @@ export function useRoutines() {
   return useQuery({
     queryKey: ['routines'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Routine[]>>('/routines');
-      return data;
+      try {
+        const { data } = await api.get<ApiResponse<Routine[]>>('/routines');
+        return data;
+      } catch {
+        // No active routines in mock mode
+        return { data: [] as Routine[] };
+      }
     },
   });
 }

@@ -26,7 +26,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarFilter: { type: 'all' },
   searchQuery: '',
   entityPanelOpen: true,
-  selectedEntityId: null,
+  selectedEntityId: 'mock-entity-1',
 
   setActiveView: (view) => set({ activeView: view }),
   setSidebarFilter: (filter) => set({ sidebarFilter: filter }),

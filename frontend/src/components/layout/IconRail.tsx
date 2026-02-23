@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import Tooltip from '../ui/Tooltip';
 import api from '../../lib/api';
 import type { View, ApiResponse, InventoryItem } from '../../types';
+import { getMockInventoryAlerts } from '../../lib/mockData';
 
 const navItems: Array<{ icon: string; view: View; route: string; tooltip: string }> = [
   { icon: '📓', view: 'journal', route: '/journal', tooltip: 'Field Journal' },
@@ -27,8 +28,12 @@ export default function IconRail() {
   const { data: alert } = useQuery({
     queryKey: ['inventory', 'alerts'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<AlertData>>('/inventory/alerts');
-      return data.data ?? { items: [], count: 0 };
+      try {
+        const { data } = await api.get<ApiResponse<AlertData>>('/inventory/alerts');
+        return data.data ?? { items: [], count: 0 };
+      } catch {
+        return getMockInventoryAlerts();
+      }
     },
   });
 

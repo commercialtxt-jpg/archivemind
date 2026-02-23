@@ -5,6 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import type { ApiResponse, FieldTrip, Concept, Entity } from '../../types';
 import SyncStatus from '../ui/SyncStatus';
+import {
+  getMockFieldTrips,
+  getMockConcepts,
+  getMockEntityCounts,
+} from '../../lib/mockData';
 
 export default function Sidebar() {
   const { sidebarFilter, setSidebarFilter, setSearchQuery } = useUIStore();
@@ -14,40 +19,60 @@ export default function Sidebar() {
   const { data: fieldTripsResp } = useQuery({
     queryKey: ['field-trips'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<FieldTrip[]>>('/field-trips');
-      return data.data ?? [];
+      try {
+        const { data } = await api.get<ApiResponse<FieldTrip[]>>('/field-trips');
+        return data.data ?? [];
+      } catch {
+        return getMockFieldTrips();
+      }
     },
   });
 
   const { data: conceptsResp } = useQuery({
     queryKey: ['concepts'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Concept[]>>('/concepts');
-      return data.data ?? [];
+      try {
+        const { data } = await api.get<ApiResponse<Concept[]>>('/concepts');
+        return data.data ?? [];
+      } catch {
+        return getMockConcepts();
+      }
     },
   });
 
   const { data: personCount } = useQuery({
     queryKey: ['entities', 'person', 'count'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=person');
-      return data.meta?.total ?? 0;
+      try {
+        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=person');
+        return data.meta?.total ?? 0;
+      } catch {
+        return getMockEntityCounts().person;
+      }
     },
   });
 
   const { data: locationCount } = useQuery({
     queryKey: ['entities', 'location', 'count'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=location');
-      return data.meta?.total ?? 0;
+      try {
+        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=location');
+        return data.meta?.total ?? 0;
+      } catch {
+        return getMockEntityCounts().location;
+      }
     },
   });
 
   const { data: artifactCount } = useQuery({
     queryKey: ['entities', 'artifact', 'count'],
     queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=artifact');
-      return data.meta?.total ?? 0;
+      try {
+        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=artifact');
+        return data.meta?.total ?? 0;
+      } catch {
+        return getMockEntityCounts().artifact;
+      }
     },
   });
 

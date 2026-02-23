@@ -6,20 +6,25 @@ import Underline from '@tiptap/extension-underline';
 import { EntityMention, ConceptTag, LocationTag } from '../../lib/tiptap';
 import { useNote, useUpdateNote } from '../../hooks/useNotes';
 import { useEditorStore } from '../../stores/editorStore';
+import { useRoutines } from '../../hooks/useRoutines';
 import EditorToolbar from '../editor/EditorToolbar';
 import NoteMetaBar from './NoteMetaBar';
 import AudioPlayer from '../media/AudioPlayer';
 import PhotoStrip from '../media/PhotoStrip';
 import OfflineBar from '../ui/OfflineBar';
+import { MOCK_AUDIO } from '../../lib/mockData';
 
 export default function NoteEditor() {
   const { activeNoteId, setDirty } = useEditorStore();
   const { data: note, isLoading } = useNote(activeNoteId);
   const updateNote = useUpdateNote();
+  const { data: routinesRes } = useRoutines();
   const [title, setTitle] = useState('');
   const [activeTab, setActiveTab] = useState<'notes' | 'map' | 'graph'>('notes');
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const activeRoutine = routinesRes?.data?.find((r) => r.is_active);
 
   const extensions = useMemo(() => [
     StarterKit.configure({
@@ -115,6 +120,15 @@ export default function NoteEditor() {
     );
   }
 
+  // Routine progress
+  const routineProgress = activeRoutine
+    ? Math.round(
+        (activeRoutine.checklist.filter((c) => c.done).length /
+          Math.max(1, activeRoutine.checklist.length)) *
+          100
+      )
+    : 0;
+
   return (
     <div className="flex flex-col h-full">
       <EditorToolbar editor={editor} activeTab={activeTab} onTabChange={setActiveTab} />
@@ -138,15 +152,33 @@ export default function NoteEditor() {
           {/* Meta bar */}
           {note && <NoteMetaBar note={note} />}
 
-          {/* Audio player (for voice memo notes) */}
-          {note?.note_type === 'voice_memo' && (
-            <div className="mt-4">
-              <AudioPlayer noteId={note.id} />
+          {/* Routine banner */}
+          {activeRoutine && (
+            <div
+              className="mt-3 rounded-lg border-l-3 border-sage px-3 py-2.5 flex items-center justify-between"
+              style={{ background: 'linear-gradient(90deg, rgba(107,140,122,.08), transparent)' }}
+            >
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="text-sage">🔄</span>
+                <span className="font-medium text-ink">{activeRoutine.name}</span>
+              </div>
+              <span className="text-[11px] font-semibold text-sage">{routineProgress}%</span>
             </div>
           )}
 
-          {/* Photo strip (for photo notes) */}
-          {note?.note_type === 'photo' && (
+          {/* Audio player — shown for interview/voice_memo notes or when mock audio exists */}
+          {note && (note.note_type === 'interview' || note.note_type === 'voice_memo') && (
+            <div className="mt-4">
+              <AudioPlayer
+                noteId={note.id}
+                duration={note.id === 'mock-note-1' ? MOCK_AUDIO.duration_seconds ?? undefined : undefined}
+                transcriptionStatus={note.id === 'mock-note-1' ? MOCK_AUDIO.transcription_status : undefined}
+              />
+            </div>
+          )}
+
+          {/* Photo strip — shown for interview notes with photos or photo notes */}
+          {note && (note.note_type === 'photo' || note.id === 'mock-note-1') && (
             <div className="mt-4">
               <PhotoStrip noteId={note.id} />
             </div>
@@ -156,6 +188,27 @@ export default function NoteEditor() {
           <div className="mt-6">
             <EditorContent editor={editor} />
           </div>
+
+          {/* Graph Note box */}
+          {note && (
+            <div
+              className="mt-6 rounded-[10px] p-3"
+              style={{
+                background: 'rgba(196,132,74,.06)',
+                border: '1px solid rgba(196,132,74,.2)',
+              }}
+            >
+              <div className="flex items-center gap-2 text-[12px] text-amber font-medium mb-1">
+                <span>🔗</span>
+                Graph Note
+              </div>
+              <p className="text-[11.5px] text-ink-muted">
+                {note.id === 'mock-note-1'
+                  ? '3 new cross-links detected — Priya Ratnam connects to Galle Coastal Plant Survey via Traditional Medicine.'
+                  : 'This note connects to entities and concepts in your knowledge graph.'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
