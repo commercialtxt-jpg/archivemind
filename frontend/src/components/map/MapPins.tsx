@@ -29,11 +29,12 @@ export default function MapPins({ entities, color = 'var(--color-coral)' }: MapP
         return (
           <Marker key={entity.id} latitude={lat} longitude={lng} anchor="center" onClick={() => handleClick(entity)}>
             <div
-              className="rounded-full border-2 border-white cursor-pointer"
+              className="map-pin-pulse rounded-full border-2 border-white cursor-pointer"
               style={{
                 width: 12,
                 height: 12,
                 backgroundColor: color,
+                color,
                 boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
               }}
             />

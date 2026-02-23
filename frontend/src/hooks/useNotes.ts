@@ -6,6 +6,7 @@ import {
   getMockNote,
   getMockNoteCounts,
 } from '../lib/mockData';
+import { cacheNotes, getCachedNotes } from '../lib/offlineDb';
 
 interface NoteFilters {
   note_type?: string;
@@ -30,8 +31,17 @@ export function useNotes(filters: NoteFilters = {}) {
           if (v !== undefined && v !== null) params.set(k, String(v));
         });
         const { data } = await api.get<ApiResponse<NoteSummary[]>>(`/notes?${params}`);
+        // Cache into IndexedDB for offline use
+        if (data.data?.length) {
+          cacheNotes(data.data).catch(() => {});
+        }
         return data;
       } catch {
+        // Try IndexedDB first before falling back to static mock data
+        const cached = await getCachedNotes();
+        if (cached.length > 0) {
+          return { data: cached, meta: { total: cached.length } } as ApiResponse<NoteSummary[]>;
+        }
         return getMockNotes();
       }
     },

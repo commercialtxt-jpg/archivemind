@@ -59,6 +59,8 @@
   /* ─── Animations ─── */
   --animate-pulse-sync: pulse-sync 2s ease-in-out infinite;
   --animate-fade-in: fade-in 0.25s ease;
+  --animate-slide-up: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-scale-in: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pulse-sync {
@@ -79,6 +81,16 @@
 @keyframes map-pulse {
   0% { transform: scale(0.5); opacity: 0.8; }
   100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* ─── Base Styles ─── */
@@ -219,4 +231,47 @@ html, body, #root {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+/* ─── Animation Utilities ─── */
+
+/* FAB entrance */
+.animate-slide-up {
+  animation: var(--animate-slide-up);
+}
+
+/* Lightbox photo entrance */
+.animate-scale-in {
+  animation: var(--animate-scale-in);
+}
+
+/* Graph overlay + lightbox overlay */
+.animate-fade-in {
+  animation: var(--animate-fade-in);
+}
+
+/* AudioPlayer waveform bars */
+.animate-wave {
+  animation: wave-anim 0.4s ease alternate infinite;
+}
+
+/* Map pin pulse ring — wrap pin in a relative container, add a ::before pseudo */
+.map-pin-pulse {
+  position: relative;
+}
+
+.map-pin-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  animation: map-pulse 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+/* Sidebar filter active state — smooth transition */
+.sidebar-filter-item {
+  transition: background 0.15s ease, color 0.15s ease;
 }

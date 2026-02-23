@@ -65,7 +65,7 @@ export default function PhotoLightbox({
   return (
     /* Overlay */
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center animate-fade-in"
       style={{ background: 'rgba(42,36,32,0.92)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => {
         // Close when clicking the backdrop (not the photo itself)
@@ -117,7 +117,7 @@ export default function PhotoLightbox({
 
       {/* Photo */}
       <div
-        className="flex flex-col items-center gap-4 px-20"
+        className="flex flex-col items-center gap-4 px-20 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div

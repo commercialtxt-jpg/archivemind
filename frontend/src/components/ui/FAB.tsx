@@ -4,7 +4,7 @@ interface FABProps {
 
 export default function FAB({ onNewNote }: FABProps) {
   return (
-    <div className="fixed bottom-7 right-[320px] flex items-center gap-2 z-30 animate-fade-in">
+    <div className="fixed bottom-7 right-[320px] flex items-center gap-2 z-30 animate-slide-up">
       <button
         title="Coming soon"
         className="flex items-center gap-1.5 px-4 py-2.5 rounded-3xl

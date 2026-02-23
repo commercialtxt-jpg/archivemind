@@ -1,4 +1,6 @@
 import NoteTypeBadge from './NoteTypeBadge';
+import HighlightText from '../ui/HighlightText';
+import { useUIStore } from '../../stores/uiStore';
 import type { NoteSummary } from '../../types';
 
 interface NoteCardProps {
@@ -8,6 +10,8 @@ interface NoteCardProps {
 }
 
 export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
+  const searchQuery = useUIStore((s) => s.searchQuery);
+
   return (
     <button
       onClick={onClick}
@@ -22,7 +26,7 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
       {/* Title + badge row */}
       <div className="flex items-start gap-2 mb-1">
         <h3 className="flex-1 font-serif text-[13.5px] font-medium leading-[1.3] text-ink line-clamp-2">
-          {note.title || 'Untitled'}
+          <HighlightText text={note.title || 'Untitled'} query={searchQuery} />
         </h3>
         <NoteTypeBadge type={note.note_type} />
       </div>
@@ -30,7 +34,7 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
       {/* Excerpt */}
       {note.body_text && (
         <p className="text-[12px] leading-[1.5] text-ink-muted line-clamp-2 mb-2">
-          {note.body_text}
+          <HighlightText text={note.body_text} query={searchQuery} />
         </p>
       )}
 
