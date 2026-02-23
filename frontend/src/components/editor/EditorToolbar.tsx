@@ -79,7 +79,7 @@ export default function EditorToolbar({ editor, activeTab, onTabChange }: Editor
           <div className="w-px h-4 bg-border-light mx-1" />
 
           {/* Insert */}
-          <FormatBtn label="[[]]" title="Insert entity mention" onClick={() => {}} />
+          <FormatBtn label="[[]]" title="Insert entity mention" onClick={() => editor.chain().focus().insertContent('@').run()} />
           <FormatBtn label="🔊" title="Insert voice" onClick={() => {}} />
           <FormatBtn label="📸" title="Insert photo" onClick={() => {}} />
         </div>

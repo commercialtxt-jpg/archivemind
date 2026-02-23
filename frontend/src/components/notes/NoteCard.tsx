@@ -34,12 +34,32 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
         </p>
       )}
 
+      {/* Tags */}
+      {note.tags && note.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5 mb-1.5">
+          {note.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-sand text-ink-soft leading-none"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Meta row */}
       <div className="flex items-center gap-3 text-[11px] text-ink-muted">
         {note.location_name && (
           <span className="flex items-center gap-1 truncate">
             <span className="text-[10px]">📍</span>
             {note.location_name}
+          </span>
+        )}
+        {note.duration_seconds && (
+          <span className="flex items-center gap-1">
+            <span className="text-[10px]">🔊</span>
+            {formatDuration(note.duration_seconds)}
           </span>
         )}
         <span className="flex items-center gap-1">
@@ -49,6 +69,12 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
       </div>
     </button>
   );
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function formatRelativeTime(iso: string): string {

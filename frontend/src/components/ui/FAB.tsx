@@ -1,47 +1,28 @@
-import { useEditorStore } from '../../stores/editorStore';
-import { useCreateNote } from '../../hooks/useNotes';
-import { useUIStore } from '../../stores/uiStore';
+interface FABProps {
+  onNewNote: () => void;
+}
 
-export default function FAB() {
-  const createNote = useCreateNote();
-  const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
-  const activeView = useUIStore((s) => s.activeView);
-
-  // Only show on journal view
-  if (activeView !== 'journal') return null;
-
-  const handleNewNote = async () => {
-    const note = await createNote.mutateAsync({ title: 'Untitled Note' } as never);
-    setActiveNoteId(note.id);
-  };
-
-  const handleRecord = () => {
-    // Future: open audio recording modal
-  };
-
+export default function FAB({ onNewNote }: FABProps) {
   return (
-    <div className="fixed bottom-7 right-[320px] flex gap-2 z-10">
+    <div className="fixed bottom-7 right-[320px] flex items-center gap-2 z-30 animate-fade-in">
       <button
-        onClick={handleRecord}
-        className="flex items-center gap-[7px] px-[18px] py-[10px] rounded-3xl
-          bg-warm-white text-ink border border-border
-          font-sans text-[13px] font-medium
-          shadow-fab hover:bg-parchment hover:-translate-y-px hover:shadow-fab-hover
-          transition-all duration-200 cursor-pointer"
+        title="Coming soon"
+        className="flex items-center gap-1.5 px-4 py-2.5 rounded-3xl
+          bg-warm-white border border-border text-ink-mid text-[13px] font-medium
+          shadow-fab hover:shadow-fab-hover hover:-translate-y-0.5
+          transition-all cursor-pointer"
       >
-        <span>🎙</span>
+        <span className="text-[14px]">🎙</span>
         Record
       </button>
       <button
-        onClick={handleNewNote}
-        disabled={createNote.isPending}
-        className="flex items-center gap-[7px] px-[18px] py-[10px] rounded-3xl
-          bg-coral text-white
-          font-sans text-[13px] font-medium
-          shadow-fab hover:bg-coral-light hover:-translate-y-px hover:shadow-fab-hover
-          transition-all duration-200 cursor-pointer disabled:opacity-50"
+        onClick={onNewNote}
+        className="flex items-center gap-1.5 px-4 py-2.5 rounded-3xl
+          bg-coral text-white text-[13px] font-semibold
+          shadow-fab hover:shadow-fab-hover hover:-translate-y-0.5
+          transition-all cursor-pointer"
       >
-        <span>✏️</span>
+        <span className="text-[14px]">✏️</span>
         New Note
       </button>
     </div>

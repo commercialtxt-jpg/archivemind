@@ -44,6 +44,8 @@ export interface NoteSummary {
   location_name: string | null;
   gps_coords: string | null;
   weather: string | null;
+  tags?: string[];
+  duration_seconds?: number | null;
   created_at: string;
   updated_at: string;
 }
