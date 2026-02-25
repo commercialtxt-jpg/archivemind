@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { EntityMention, ConceptTag, LocationTag } from '../../lib/tiptap';
-import { useNote, useUpdateNote } from '../../hooks/useNotes';
+import { useNote, useUpdateNote, useToggleStar } from '../../hooks/useNotes';
 import { useEditorStore } from '../../stores/editorStore';
 import { useRoutines } from '../../hooks/useRoutines';
 import EditorToolbar from '../editor/EditorToolbar';
@@ -18,6 +18,7 @@ export default function NoteEditor() {
   const { activeNoteId, setDirty } = useEditorStore();
   const { data: note, isLoading } = useNote(activeNoteId);
   const updateNote = useUpdateNote();
+  const toggleStar = useToggleStar();
   const { data: routinesRes } = useRoutines();
   const [title, setTitle] = useState('');
   const [activeTab, setActiveTab] = useState<'notes' | 'map' | 'graph'>('notes');
@@ -101,7 +102,7 @@ export default function NoteEditor() {
   if (!activeNoteId) {
     return (
       <div className="flex flex-col h-full">
-        <EditorToolbar editor={null} activeTab={activeTab} onTabChange={setActiveTab} />
+        <EditorToolbar editor={null} activeTab={activeTab} onTabChange={setActiveTab} note={null} />
         <div className="flex-1 flex items-center justify-center text-ink-muted text-sm">
           Select a note or create a new one
         </div>
@@ -112,7 +113,7 @@ export default function NoteEditor() {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full">
-        <EditorToolbar editor={null} activeTab={activeTab} onTabChange={setActiveTab} />
+        <EditorToolbar editor={null} activeTab={activeTab} onTabChange={setActiveTab} note={null} />
         <div className="flex-1 flex items-center justify-center text-ink-muted text-sm">
           Loading...
         </div>
@@ -131,23 +132,36 @@ export default function NoteEditor() {
 
   return (
     <div className="flex flex-col h-full">
-      <EditorToolbar editor={editor} activeTab={activeTab} onTabChange={setActiveTab} />
+      <EditorToolbar editor={editor} activeTab={activeTab} onTabChange={setActiveTab} note={note ?? null} />
       <OfflineBar />
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[780px] mx-auto px-[60px] py-10">
           {/* Title */}
-          <textarea
-            ref={titleRef}
-            value={title}
-            onChange={handleTitleChange}
-            onBlur={handleTitleBlur}
-            placeholder="Untitled"
-            rows={1}
-            className="w-full font-serif text-[28px] font-semibold leading-[1.25] text-ink
-              bg-transparent border-none outline-none resize-none overflow-hidden
-              placeholder:text-ink-ghost"
-          />
+          <div className="flex items-start gap-2">
+            <textarea
+              ref={titleRef}
+              value={title}
+              onChange={handleTitleChange}
+              onBlur={handleTitleBlur}
+              placeholder="Untitled"
+              rows={1}
+              className="flex-1 font-serif text-[28px] font-semibold leading-[1.25] text-ink
+                bg-transparent border-none outline-none resize-none overflow-hidden
+                placeholder:text-ink-ghost"
+            />
+            {note && (
+              <button
+                onClick={() => toggleStar.mutate(note.id)}
+                className={`mt-2 text-[20px] transition-colors cursor-pointer flex-shrink-0 ${
+                  note.is_starred ? 'text-amber' : 'text-ink-ghost hover:text-amber/60'
+                }`}
+                title={note.is_starred ? 'Unstar' : 'Star'}
+              >
+                {note.is_starred ? '★' : '☆'}
+              </button>
+            )}
+          </div>
 
           {/* Meta bar */}
           {note && <NoteMetaBar note={note} />}

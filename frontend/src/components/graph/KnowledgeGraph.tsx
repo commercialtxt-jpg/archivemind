@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { useNavigate } from 'react-router-dom';
 import { useGraph } from '../../hooks/useGraph';
+import { useUIStore } from '../../stores/uiStore';
 import type { GraphNode } from '../../types';
 
 type FilterType = 'all' | 'interviews' | 'concepts' | 'locations';
@@ -31,6 +33,8 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(undefined);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const navigate = useNavigate();
+  const { setSelectedEntityId, setSidebarFilter, setActiveView } = useUIStore();
 
   // Handle resize
   useEffect(() => {
@@ -69,6 +73,25 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
       setVisibleTypes(new Set(['location']));
     }
   };
+
+  // Node click navigation
+  const handleNodeClick = useCallback((node: GraphNode) => {
+    if (!node?.id) return;
+
+    if (node.node_type === 'person' || node.node_type === 'location' || node.node_type === 'artifact') {
+      // Entity node — show in entity panel and go to journal
+      setSelectedEntityId(node.id);
+      setActiveView('journal');
+      navigate('/');
+      onClose();
+    } else if (node.node_type === 'concept') {
+      // Concept node — filter sidebar by concept and go to journal
+      setSidebarFilter({ type: 'concept', id: node.id, label: node.label });
+      setActiveView('journal');
+      navigate('/');
+      onClose();
+    }
+  }, [setSelectedEntityId, setSidebarFilter, setActiveView, navigate, onClose]);
 
   // Transform data for react-force-graph
   const forceData = useMemo(() => {
@@ -199,6 +222,12 @@ export default function KnowledgeGraph({ onClose }: KnowledgeGraphProps) {
             cooldownTicks={100}
             enableNodeDrag={true}
             enableZoomInteraction={true}
+            onNodeClick={handleNodeClick}
+            onNodeHover={(node) => {
+              if (containerRef.current) {
+                containerRef.current.style.cursor = node ? 'pointer' : 'default';
+              }
+            }}
           />
         )}
       </div>

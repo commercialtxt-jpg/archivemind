@@ -9,6 +9,18 @@ vi.mock('../../../stores/uiStore', () => ({
   useUIStore: () => '',
 }));
 
+// Stub mutation hooks so NoteCard doesn't need a QueryClientProvider.
+// Note: vi.mock is hoisted, so no top-level variables may be referenced here.
+vi.mock('../../../hooks/useNotes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../hooks/useNotes')>();
+  return {
+    ...actual,
+    useToggleStar: () => ({ mutate: vi.fn(), isPending: false }),
+    useRestoreNote: () => ({ mutate: vi.fn(), isPending: false }),
+    usePermanentDeleteNote: () => ({ mutate: vi.fn(), isPending: false }),
+  };
+});
+
 const baseNote: NoteSummary = {
   id: 'note-1',
   workspace_id: 'ws-1',
@@ -74,26 +86,29 @@ describe('NoteCard', () => {
   });
 
   it('applies active styling when isActive is true', () => {
+    // The outer card is a div[role="button"]; get the first one
     const { container } = render(
       <NoteCard note={baseNote} isActive={true} onClick={vi.fn()} />
     );
-    const button = container.querySelector('button');
-    expect(button?.className).toMatch(/bg-card-bg/);
+    const card = container.querySelector('[role="button"]');
+    expect(card?.className).toMatch(/bg-card-bg/);
   });
 
   it('does not apply active styling when isActive is false', () => {
     const { container } = render(
       <NoteCard note={baseNote} isActive={false} onClick={vi.fn()} />
     );
-    const button = container.querySelector('button');
-    expect(button?.className).not.toMatch(/bg-card-bg/);
+    const card = container.querySelector('[role="button"]');
+    expect(card?.className).not.toMatch(/bg-card-bg/);
   });
 
   it('calls onClick when clicked', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<NoteCard note={baseNote} isActive={false} onClick={onClick} />);
-    await user.click(screen.getByRole('button'));
+    // The card div is the first element with role="button"
+    const cards = screen.getAllByRole('button');
+    await user.click(cards[0]);
     expect(onClick).toHaveBeenCalledOnce();
   });
 });

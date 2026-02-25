@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use sqlx::PgPool;
@@ -17,7 +17,7 @@ async fn list_routines(
 ) -> Result<Json<ApiResponse<Vec<Routine>>>, AppError> {
     let routines = sqlx::query_as::<_, Routine>(
         "SELECT id, workspace_id, name, checklist, is_active, created_at, updated_at \
-         FROM routines WHERE workspace_id = $1 ORDER BY created_at DESC"
+         FROM routines WHERE workspace_id = $1 ORDER BY created_at DESC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -39,7 +39,7 @@ async fn create_routine(
 
     let routine = sqlx::query_as::<_, Routine>(
         "INSERT INTO routines (workspace_id, name, checklist) VALUES ($1, $2, $3) \
-         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at"
+         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at",
     )
     .bind(auth.workspace_id)
     .bind(&body.name)
@@ -63,7 +63,7 @@ async fn update_routine(
          is_active = COALESCE($5, is_active), \
          updated_at = now() \
          WHERE id = $1 AND workspace_id = $2 \
-         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at"
+         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -83,15 +83,17 @@ async fn start_routine(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Routine>>, AppError> {
     // Deactivate all other routines first
-    sqlx::query("UPDATE routines SET is_active = false, updated_at = now() WHERE workspace_id = $1")
-        .bind(auth.workspace_id)
-        .execute(&pool)
-        .await?;
+    sqlx::query(
+        "UPDATE routines SET is_active = false, updated_at = now() WHERE workspace_id = $1",
+    )
+    .bind(auth.workspace_id)
+    .execute(&pool)
+    .await?;
 
     let routine = sqlx::query_as::<_, Routine>(
         "UPDATE routines SET is_active = true, updated_at = now() \
          WHERE id = $1 AND workspace_id = $2 \
-         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at"
+         RETURNING id, workspace_id, name, checklist, is_active, created_at, updated_at",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -105,6 +107,6 @@ async fn start_routine(
 pub fn routes() -> Router<PgPool> {
     Router::new()
         .route("/api/v1/routines", get(list_routines).post(create_routine))
-        .route("/api/v1/routines/{id}", get(update_routine))
+        .route("/api/v1/routines/{id}", put(update_routine))
         .route("/api/v1/routines/{id}/start", post(start_routine))
 }

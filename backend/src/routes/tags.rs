@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::State, routing::get, Json, Router};
 use sqlx::PgPool;
 
 use crate::auth::middleware::AuthUser;
@@ -20,7 +16,7 @@ async fn list_tags(
          LEFT JOIN note_tags nt ON nt.tag_id = t.id \
          WHERE t.workspace_id = $1 \
          GROUP BY t.id \
-         ORDER BY t.name ASC"
+         ORDER BY t.name ASC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -31,6 +27,5 @@ async fn list_tags(
 }
 
 pub fn routes() -> Router<PgPool> {
-    Router::new()
-        .route("/api/v1/tags", get(list_tags))
+    Router::new().route("/api/v1/tags", get(list_tags))
 }

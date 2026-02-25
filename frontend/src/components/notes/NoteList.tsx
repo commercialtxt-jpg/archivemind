@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { useNotes, useCreateNote } from '../../hooks/useNotes';
+import { useNotes, useCreateNote, usePermanentDeleteNote } from '../../hooks/useNotes';
 import { useSearch } from '../../hooks/useSearch';
 import NoteCard from './NoteCard';
 
@@ -9,6 +9,23 @@ export default function NoteList() {
   const { sidebarFilter, searchQuery } = useUIStore();
   const { activeNoteId, setActiveNoteId } = useEditorStore();
   const createNote = useCreateNote();
+  const permanentDelete = usePermanentDeleteNote();
+  const isTrashView = sidebarFilter.type === 'trash';
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'type'>('newest');
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuButtonRef.current && menuButtonRef.current.contains(e.target as Node)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [menuOpen]);
 
   const filters = useMemo(() => {
     const f: Record<string, string | boolean> = {};
@@ -32,8 +49,14 @@ export default function NoteList() {
         if (sidebarFilter.id) f.note_type = sidebarFilter.id;
         break;
     }
+
+    // Sorting
+    if (sortBy === 'newest') { f.sort = 'created_at'; f.order = 'desc'; }
+    else if (sortBy === 'oldest') { f.sort = 'created_at'; f.order = 'asc'; }
+    else if (sortBy === 'type') { f.sort = 'note_type'; f.order = 'asc'; }
+
     return f;
-  }, [sidebarFilter]);
+  }, [sidebarFilter, sortBy]);
 
   const isSearching = searchQuery.length >= 2;
   const { data, isLoading } = useNotes(isSearching ? {} : filters);
@@ -80,27 +103,69 @@ export default function NoteList() {
     setActiveNoteId(note.id);
   };
 
+  const handleEmptyTrash = () => {
+    for (const note of notes) {
+      permanentDelete.mutate(note.id);
+    }
+  };
+
   return (
     <div className="flex flex-col w-[260px] shrink-0 bg-panel-bg border-r border-border-light">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">
         <h2 className="font-serif text-[15px] font-semibold text-ink">{title}</h2>
         <div className="flex items-center gap-1">
-          <button
-            className="flex items-center justify-center w-7 h-7 rounded-md text-ink-muted hover:bg-sand hover:text-ink transition-all cursor-pointer"
-            title="More options"
-          >
-            ⋮
-          </button>
-          <button
-            onClick={handleNewNote}
-            disabled={createNote.isPending}
-            className="flex items-center justify-center w-7 h-7 rounded-md bg-coral text-white shadow-coral-btn
-              hover:bg-coral-light transition-all cursor-pointer disabled:opacity-50"
-            title="New note"
-          >
-            +
-          </button>
+          {isTrashView && notes.length > 0 && (
+            <button
+              onClick={handleEmptyTrash}
+              disabled={permanentDelete.isPending}
+              className="text-[11px] text-coral hover:text-coral-light cursor-pointer font-medium mr-1 disabled:opacity-50 transition-colors"
+              title="Permanently delete all trashed notes"
+            >
+              Empty Trash
+            </button>
+          )}
+          {!isTrashView && (
+            <>
+              <div className="relative">
+                <button
+                  ref={menuButtonRef}
+                  onClick={() => setMenuOpen((o) => !o)}
+                  className="flex items-center justify-center w-7 h-7 rounded-md text-ink-muted hover:bg-sand hover:text-ink transition-all cursor-pointer"
+                  title="More options"
+                >
+                  ⋮
+                </button>
+                {menuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg border border-border-light shadow-card-active z-20 py-1 animate-fade-in">
+                    {(['newest', 'oldest', 'type'] as const).map((option) => {
+                      const labels = { newest: 'Newest first', oldest: 'Oldest first', type: 'By type' };
+                      const active = sortBy === option;
+                      return (
+                        <button
+                          key={option}
+                          onClick={() => { setSortBy(option); setMenuOpen(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-[12px] cursor-pointer transition-colors
+                            ${active ? 'text-coral font-medium bg-glow-coral' : 'text-ink-muted hover:bg-parchment'}`}
+                        >
+                          {labels[option]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleNewNote}
+                disabled={createNote.isPending}
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-coral text-white shadow-coral-btn
+                  hover:bg-coral-light transition-all cursor-pointer disabled:opacity-50"
+                title="New note"
+              >
+                +
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -131,6 +196,7 @@ export default function NoteList() {
               note={note}
               isActive={note.id === activeNoteId}
               onClick={() => setActiveNoteId(note.id)}
+              isTrashView={isTrashView}
             />
           ))
         )}

@@ -1,4 +1,8 @@
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -18,7 +22,9 @@ async fn register(
         return Err(AppError::BadRequest("All fields are required".to_string()));
     }
     if body.password.len() < 8 {
-        return Err(AppError::BadRequest("Password must be at least 8 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".to_string(),
+        ));
     }
 
     let password_hash = hash_password(&body.password)?;
@@ -31,12 +37,15 @@ async fn register(
         .collect::<String>()
         .to_uppercase();
 
-    let mut tx = pool.begin().await.map_err(|e| AppError::Internal(e.to_string()))?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let user = sqlx::query_as::<_, User>(
         "INSERT INTO users (email, password_hash, display_name, avatar_initials)
          VALUES ($1, $2, $3, $4)
-         RETURNING *"
+         RETURNING *",
     )
     .bind(&body.email)
     .bind(&password_hash)
@@ -51,17 +60,28 @@ async fn register(
         _ => AppError::from(e),
     })?;
 
-    let workspace_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO workspaces (user_id, name) VALUES ($1, $2) RETURNING id"
-    )
-    .bind(user.id)
-    .bind("Field Research")
-    .fetch_one(&mut *tx)
-    .await?;
+    let workspace_id: Uuid =
+        sqlx::query_scalar("INSERT INTO workspaces (user_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(user.id)
+            .bind("Field Research")
+            .fetch_one(&mut *tx)
+            .await?;
 
-    tx.commit().await.map_err(|e| AppError::Internal(e.to_string()))?;
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let token = create_token(user.id, workspace_id, &config.jwt_secret, config.jwt_expiry_hours)?;
+    // Seed demo workspace data. Non-fatal: warn only so registration always succeeds.
+    if let Err(e) = crate::seed::seed_demo_workspace(&pool, user.id, workspace_id).await {
+        tracing::warn!("Failed to seed demo workspace: {e}");
+    }
+
+    let token = create_token(
+        user.id,
+        workspace_id,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )?;
 
     Ok(Json(AuthResponse {
         token,
@@ -81,17 +101,24 @@ async fn login(
         .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
 
     if !verify_password(&body.password, &user.password_hash)? {
-        return Err(AppError::Unauthorized("Invalid email or password".to_string()));
+        return Err(AppError::Unauthorized(
+            "Invalid email or password".to_string(),
+        ));
     }
 
     let workspace_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM workspaces WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1"
+        "SELECT id FROM workspaces WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1",
     )
     .bind(user.id)
     .fetch_one(&pool)
     .await?;
 
-    let token = create_token(user.id, workspace_id, &config.jwt_secret, config.jwt_expiry_hours)?;
+    let token = create_token(
+        user.id,
+        workspace_id,
+        &config.jwt_secret,
+        config.jwt_expiry_hours,
+    )?;
 
     Ok(Json(AuthResponse {
         token,

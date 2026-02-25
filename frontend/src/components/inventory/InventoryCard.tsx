@@ -3,6 +3,7 @@ import type { InventoryItem } from '../../types';
 interface InventoryCardProps {
   item: InventoryItem;
   onStatusChange?: (id: string, status: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 const statusStyles: Record<string, string> = {
@@ -13,11 +14,11 @@ const statusStyles: Record<string, string> = {
   missing: 'bg-coral/10 text-coral border-coral/25',
 };
 
-export default function InventoryCard({ item, onStatusChange }: InventoryCardProps) {
+export default function InventoryCard({ item, onStatusChange, onDelete }: InventoryCardProps) {
   const style = statusStyles[item.status] || statusStyles.packed;
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-border-light hover:shadow-card transition-all">
+    <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-border-light hover:shadow-card transition-all group">
       {/* Icon */}
       <span className="text-xl flex-shrink-0">{item.icon}</span>
 
@@ -29,6 +30,7 @@ export default function InventoryCard({ item, onStatusChange }: InventoryCardPro
       {/* Status badge */}
       <button
         onClick={() => onStatusChange?.(item.id, item.status)}
+        title="Click to cycle status"
         className={`
           text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border
           cursor-pointer transition-all hover:opacity-80
@@ -37,6 +39,17 @@ export default function InventoryCard({ item, onStatusChange }: InventoryCardPro
       >
         {item.status}
       </button>
+
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          onClick={() => onDelete(item.id)}
+          title="Remove item"
+          className="text-[11px] text-ink-ghost hover:text-coral ml-1 cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }

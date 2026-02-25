@@ -256,6 +256,82 @@ export function useDeleteNote() {
 }
 
 // ---------------------------------------------------------------------------
+// useRestoreNote — optimistic: remove from trash list immediately
+// ---------------------------------------------------------------------------
+export function useRestoreNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.post(`/notes/${id}/restore`);
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['notes'] });
+      const snapshots: Array<[unknown[], ApiResponse<NoteSummary[]> | undefined]> = [];
+      const listKeys = getNoteListKeys(queryClient);
+      for (const key of listKeys) {
+        const prev = queryClient.getQueryData<ApiResponse<NoteSummary[]>>(key);
+        snapshots.push([key as unknown[], prev]);
+        if (prev) {
+          queryClient.setQueryData<ApiResponse<NoteSummary[]>>(key, {
+            ...prev,
+            data: prev.data.filter((n) => n.id !== id),
+          });
+        }
+      }
+      return { snapshots };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.snapshots) {
+        for (const [key, prev] of context.snapshots) {
+          queryClient.setQueryData(key, prev);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// usePermanentDeleteNote — optimistic: remove from all list caches
+// ---------------------------------------------------------------------------
+export function usePermanentDeleteNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/notes/${id}/permanent`);
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['notes'] });
+      const snapshots: Array<[unknown[], ApiResponse<NoteSummary[]> | undefined]> = [];
+      const listKeys = getNoteListKeys(queryClient);
+      for (const key of listKeys) {
+        const prev = queryClient.getQueryData<ApiResponse<NoteSummary[]>>(key);
+        snapshots.push([key as unknown[], prev]);
+        if (prev) {
+          queryClient.setQueryData<ApiResponse<NoteSummary[]>>(key, {
+            ...prev,
+            data: prev.data.filter((n) => n.id !== id),
+          });
+        }
+      }
+      return { snapshots };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.snapshots) {
+        for (const [key, prev] of context.snapshots) {
+          queryClient.setQueryData(key, prev);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useToggleStar — optimistic: flip is_starred immediately
 // ---------------------------------------------------------------------------
 export function useToggleStar() {

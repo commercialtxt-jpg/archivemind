@@ -1,13 +1,23 @@
 import { useState } from 'react';
-import { useInventory, useCreateInventoryItem } from '../hooks/useInventory';
+import { useInventory, useCreateInventoryItem, useUpdateInventoryItem, useDeleteInventoryItem } from '../hooks/useInventory';
 import InventoryCard from '../components/inventory/InventoryCard';
 import InventoryAlert from '../components/inventory/InventoryAlert';
+
+const STATUS_CYCLE = ['packed', 'ready', 'charged', 'low', 'missing'];
 
 export default function InventoryView() {
   const { data, isLoading } = useInventory();
   const createItem = useCreateInventoryItem();
+  const updateItem = useUpdateInventoryItem();
+  const deleteItem = useDeleteInventoryItem();
   const [newName, setNewName] = useState('');
   const items = data?.data ?? [];
+
+  const handleStatusChange = (id: string, currentStatus: string) => {
+    const idx = STATUS_CYCLE.indexOf(currentStatus);
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    updateItem.mutate({ id, status: next });
+  };
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -53,7 +63,12 @@ export default function InventoryView() {
         ) : (
           <div className="space-y-2">
             {items.map((item) => (
-              <InventoryCard key={item.id} item={item} />
+              <InventoryCard
+                key={item.id}
+                item={item}
+                onStatusChange={handleStatusChange}
+                onDelete={(id) => deleteItem.mutate(id)}
+              />
             ))}
           </div>
         )}

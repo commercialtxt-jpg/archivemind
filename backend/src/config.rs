@@ -18,7 +18,8 @@ impl Config {
                 .unwrap_or_else(|_| "72".to_string())
                 .parse()
                 .expect("JWT_EXPIRY_HOURS must be a number"),
-            cors_origin: env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            cors_origin: env::var("CORS_ORIGIN")
+                .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             port: env::var("PORT")
                 .unwrap_or_else(|_| "8080".to_string())
                 .parse()

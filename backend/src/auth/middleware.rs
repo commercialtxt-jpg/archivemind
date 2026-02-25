@@ -1,7 +1,4 @@
-use axum::{
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use uuid::Uuid;
 
 use crate::auth::jwt::{verify_token, Claims};
@@ -36,7 +33,9 @@ where
             .strip_prefix("Bearer ")
             .ok_or_else(|| AppError::Unauthorized("Invalid authorization format".to_string()))?;
 
-        let Claims { sub, workspace_id, .. } = verify_token(token, &config.jwt_secret)?;
+        let Claims {
+            sub, workspace_id, ..
+        } = verify_token(token, &config.jwt_secret)?;
 
         Ok(AuthUser {
             user_id: sub,

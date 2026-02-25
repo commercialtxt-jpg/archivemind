@@ -17,7 +17,7 @@ async fn list_inventory(
 ) -> Result<Json<ApiResponse<Vec<InventoryItem>>>, AppError> {
     let items = sqlx::query_as::<_, InventoryItem>(
         "SELECT id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at \
-         FROM inventory_items WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC"
+         FROM inventory_items WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -42,7 +42,7 @@ async fn create_inventory_item(
     let item = sqlx::query_as::<_, InventoryItem>(
         "INSERT INTO inventory_items (workspace_id, name, icon, status, sort_order) \
          VALUES ($1, $2, $3, $4::inventory_status, $5) \
-         RETURNING id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at"
+         RETURNING id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at",
     )
     .bind(auth.workspace_id)
     .bind(&body.name)
@@ -69,7 +69,7 @@ async fn update_inventory_item(
          sort_order = COALESCE($6, sort_order), \
          updated_at = now() \
          WHERE id = $1 AND workspace_id = $2 \
-         RETURNING id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at"
+         RETURNING id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -89,13 +89,11 @@ async fn delete_inventory_item(
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
-    let result = sqlx::query(
-        "DELETE FROM inventory_items WHERE id = $1 AND workspace_id = $2"
-    )
-    .bind(id)
-    .bind(auth.workspace_id)
-    .execute(&pool)
-    .await?;
+    let result = sqlx::query("DELETE FROM inventory_items WHERE id = $1 AND workspace_id = $2")
+        .bind(id)
+        .bind(auth.workspace_id)
+        .execute(&pool)
+        .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound("Inventory item not found".to_string()));
@@ -110,7 +108,7 @@ async fn inventory_alerts(
     let items = sqlx::query_as::<_, InventoryItem>(
         "SELECT id, workspace_id, name, icon, status::text, sort_order, created_at, updated_at \
          FROM inventory_items WHERE workspace_id = $1 AND status::text IN ('low', 'missing') \
-         ORDER BY sort_order ASC"
+         ORDER BY sort_order ASC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -122,7 +120,13 @@ async fn inventory_alerts(
 
 pub fn routes() -> Router<PgPool> {
     Router::new()
-        .route("/api/v1/inventory", get(list_inventory).post(create_inventory_item))
-        .route("/api/v1/inventory/{id}", get(update_inventory_item).delete(delete_inventory_item))
+        .route(
+            "/api/v1/inventory",
+            get(list_inventory).post(create_inventory_item),
+        )
+        .route(
+            "/api/v1/inventory/{id}",
+            get(update_inventory_item).delete(delete_inventory_item),
+        )
         .route("/api/v1/inventory/alerts", get(inventory_alerts))
 }

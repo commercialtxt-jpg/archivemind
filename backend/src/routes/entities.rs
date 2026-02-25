@@ -35,7 +35,7 @@ async fn list_entities(
         .await?;
 
         let total: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM entities WHERE workspace_id = $1 AND entity_type::text = $2"
+            "SELECT COUNT(*) FROM entities WHERE workspace_id = $1 AND entity_type::text = $2",
         )
         .bind(auth.workspace_id)
         .bind(entity_type)
@@ -54,12 +54,11 @@ async fn list_entities(
         .fetch_all(&pool)
         .await?;
 
-        let total: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM entities WHERE workspace_id = $1"
-        )
-        .bind(auth.workspace_id)
-        .fetch_one(&pool)
-        .await?;
+        let total: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM entities WHERE workspace_id = $1")
+                .bind(auth.workspace_id)
+                .fetch_one(&pool)
+                .await?;
 
         (entities, total)
     };
@@ -82,7 +81,7 @@ async fn get_entity(
          LEFT JOIN note_entities ne ON ne.entity_id = e.id \
          LEFT JOIN note_concepts nc ON nc.note_id = ne.note_id \
          WHERE e.id = $1 AND e.workspace_id = $2 \
-         GROUP BY e.id"
+         GROUP BY e.id",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -165,7 +164,7 @@ async fn entity_notes(
          FROM notes n \
          JOIN note_entities ne ON ne.note_id = n.id \
          WHERE ne.entity_id = $1 AND n.workspace_id = $2 AND n.deleted_at IS NULL \
-         ORDER BY n.created_at DESC"
+         ORDER BY n.created_at DESC",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -188,7 +187,7 @@ async fn entity_topics(
          JOIN note_entities ne ON ne.note_id = nc.note_id \
          WHERE ne.entity_id = $1 AND c.workspace_id = $2 \
          GROUP BY c.id \
-         ORDER BY note_count DESC"
+         ORDER BY note_count DESC",
     )
     .bind(id)
     .bind(auth.workspace_id)

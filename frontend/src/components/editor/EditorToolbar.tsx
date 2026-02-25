@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useOfflineStore } from '../../stores/offlineStore';
 
@@ -5,13 +6,32 @@ interface EditorToolbarProps {
   editor: Editor | null;
   activeTab: 'notes' | 'map' | 'graph';
   onTabChange: (tab: 'notes' | 'map' | 'graph') => void;
+  note?: { id: string; title: string; body_text: string } | null;
 }
 
-export default function EditorToolbar({ editor, activeTab, onTabChange }: EditorToolbarProps) {
+export default function EditorToolbar({ editor, activeTab, onTabChange, note }: EditorToolbarProps) {
   const { isOffline, setOffline } = useOfflineStore();
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const handleExport = () => {
+    if (!note) return;
+    const md = `# ${note.title}\n\n${note.body_text}`;
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(note.title || 'untitled').replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="bg-warm-white border-b border-border-light">
+    <div className="relative bg-warm-white border-b border-border-light">
       {/* Row 1: View tabs + actions */}
       <div className="flex items-center justify-between px-4 py-2">
         {/* View tabs */}
@@ -25,8 +45,8 @@ export default function EditorToolbar({ editor, activeTab, onTabChange }: Editor
         <div className="flex items-center gap-1">
           <ToolbarIconBtn icon="📡" title="Offline mode" active={isOffline} onClick={() => setOffline(!isOffline)} />
           <ToolbarIconBtn icon="🕸" title="Knowledge Graph" active />
-          <ToolbarIconBtn icon="⬆" title="Export" />
-          <ToolbarIconBtn icon="⚙" title="Settings" />
+          <ToolbarIconBtn icon="⬆" title="Export as Markdown" onClick={handleExport} />
+          <ToolbarIconBtn icon="⚙" title="Settings" onClick={() => showToast('Settings coming soon')} />
         </div>
       </div>
 
@@ -80,8 +100,15 @@ export default function EditorToolbar({ editor, activeTab, onTabChange }: Editor
 
           {/* Insert */}
           <FormatBtn label="[[]]" title="Insert entity mention" onClick={() => editor.chain().focus().insertContent('@').run()} />
-          <FormatBtn label="🔊" title="Insert voice" onClick={() => {}} />
-          <FormatBtn label="📸" title="Insert photo" onClick={() => {}} />
+          <FormatBtn label="🔊" title="Insert voice" onClick={() => showToast('Voice recording coming soon')} />
+          <FormatBtn label="📸" title="Insert photo" onClick={() => showToast('Photo upload coming soon')} />
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="absolute bottom-[-36px] right-4 bg-ink text-cream text-[11px] px-3 py-1.5 rounded-md shadow-card-active z-50 animate-fade-in">
+          {toast}
         </div>
       )}
     </div>

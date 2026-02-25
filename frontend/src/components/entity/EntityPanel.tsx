@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useEditorStore } from '../../stores/editorStore';
-import {
-  MOCK_ENTITIES,
-  MOCK_ENTITY_TOPICS,
-  MOCK_INVENTORY,
-  MOCK_CONNECTED_NOTES,
-  type ConnectedNote,
-} from '../../lib/mockData';
-import type { InventoryItem } from '../../types';
+import { useEntity, useEntityTopics, useEntityNotes } from '../../hooks/useEntities';
+import { useInventory } from '../../hooks/useInventory';
+import type { InventoryItem, NoteSummary } from '../../types';
 
 type Tab = 'entity' | 'linked' | 'map' | 'gear';
 
@@ -89,14 +84,48 @@ function TabBar({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: T
 // ---------------------------------------------------------------------------
 
 function EntityTab() {
-  const entity = MOCK_ENTITIES[0];
-  const topics = MOCK_ENTITY_TOPICS;
-  const inventory = MOCK_INVENTORY;
+  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const { data: entity, isLoading: entityLoading } = useEntity(selectedEntityId);
+  const { data: topics, isLoading: topicsLoading } = useEntityTopics(selectedEntityId);
+  const { data: entityNotes } = useEntityNotes(selectedEntityId);
+  const { data: inventoryRes } = useInventory();
+
+  const inventory = inventoryRes?.data ?? [];
 
   const badStatuses = ['low', 'missing', 'needs_check'];
   const needsAttention = inventory.filter((i) => badStatuses.includes(i.status));
   const readyCount = inventory.filter((i) => !badStatuses.includes(i.status)).length;
   const totalCount = inventory.length;
+
+  // No entity selected
+  if (!selectedEntityId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
+        <span className="text-2xl mb-2">👤</span>
+        Select an entity to view details
+      </div>
+    );
+  }
+
+  // Loading state
+  if (entityLoading || topicsLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm">
+        <div className="w-5 h-5 border-2 border-coral/30 border-t-coral rounded-full animate-spin mb-2" />
+        Loading...
+      </div>
+    );
+  }
+
+  // Entity not found
+  if (!entity) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
+        <span className="text-2xl mb-2">🔍</span>
+        Entity not found
+      </div>
+    );
+  }
 
   return (
     <div className="px-3 pb-4 space-y-3">
@@ -118,27 +147,29 @@ function EntityTab() {
 
       {/* ── Stats grid ── */}
       <div className="grid grid-cols-3 gap-2">
-        <StatCard label="MENTIONS" value={entity.total_mentions} />
-        <StatCard label="SESSIONS" value={entity.session_count} />
-        <StatCard label="CONCEPTS" value={entity.concept_count} />
+        <StatCard label="MENTIONS" value={entity.total_mentions ?? 0} />
+        <StatCard label="SESSIONS" value={entity.session_count ?? 0} />
+        <StatCard label="CONCEPTS" value={entity.concept_count ?? 0} />
       </div>
 
       {/* ── Topics section ── */}
-      <div>
-        <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
-          Associated Topics
-        </h4>
-        <div className="flex flex-wrap gap-1.5">
-          {topics.map((t) => (
-            <span
-              key={t.id}
-              className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] bg-white text-ink-mid border border-border-light cursor-default hover:border-coral/40 transition-colors"
-            >
-              {t.name}
-            </span>
-          ))}
+      {topics && topics.length > 0 && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
+            Associated Topics
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {topics.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] bg-white text-ink-mid border border-border-light cursor-default hover:border-coral/40 transition-colors"
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Location mini-map ── */}
       <div>
@@ -176,33 +207,37 @@ function EntityTab() {
       )}
 
       {/* ── Field Kit Status ── */}
-      <div className="bg-white p-3 rounded-lg border border-border-light">
-        <div className="flex items-center justify-between mb-2.5">
-          <span className="text-[11.5px] font-semibold text-ink">🎒 Field Kit Status</span>
-          <span className="text-[11px] font-semibold text-sage">{readyCount}/{totalCount} Ready</span>
+      {inventory.length > 0 && (
+        <div className="bg-white p-3 rounded-lg border border-border-light">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11.5px] font-semibold text-ink">🎒 Field Kit Status</span>
+            <span className="text-[11px] font-semibold text-sage">{readyCount}/{totalCount} Ready</span>
+          </div>
+          <div className="space-y-1.5">
+            {inventory.map((item: InventoryItem) => (
+              <div key={item.id} className="flex items-center gap-2 text-[11.5px]">
+                <span className="text-[12px] w-4 text-center flex-shrink-0">{item.icon}</span>
+                <span className="flex-1 text-ink-mid truncate">{item.name}</span>
+                <InventoryStatusBadge status={item.status} />
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="space-y-1.5">
-          {inventory.map((item: InventoryItem) => (
-            <div key={item.id} className="flex items-center gap-2 text-[11.5px]">
-              <span className="text-[12px] w-4 text-center flex-shrink-0">{item.icon}</span>
-              <span className="flex-1 text-ink-mid truncate">{item.name}</span>
-              <InventoryStatusBadge status={item.status} />
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* ── Connected notes ── */}
-      <div>
-        <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
-          Connected Notes
-        </h4>
-        <div className="space-y-1.5">
-          {MOCK_CONNECTED_NOTES.map((note) => (
-            <ConnectedNoteCard key={note.id} note={note} />
-          ))}
+      {entityNotes && entityNotes.length > 0 && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
+            Connected Notes
+          </h4>
+          <div className="space-y-1.5">
+            {entityNotes.map((note) => (
+              <ConnectedNoteCard key={note.id} note={note} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -212,7 +247,36 @@ function EntityTab() {
 // ---------------------------------------------------------------------------
 
 function LinkedTab() {
+  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
+  const { data: entityNotes, isLoading } = useEntityNotes(selectedEntityId);
+
+  if (!selectedEntityId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
+        <span className="text-2xl mb-2">🔗</span>
+        Select an entity to view linked notes
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm">
+        <div className="w-5 h-5 border-2 border-coral/30 border-t-coral rounded-full animate-spin mb-2" />
+        Loading...
+      </div>
+    );
+  }
+
+  if (!entityNotes || entityNotes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
+        <span className="text-2xl mb-2">📝</span>
+        No linked notes yet
+      </div>
+    );
+  }
 
   return (
     <div className="px-3 pb-4">
@@ -220,23 +284,25 @@ function LinkedTab() {
         All Linked Notes
       </h4>
       <div className="space-y-2">
-        {MOCK_CONNECTED_NOTES.map((note) => (
+        {entityNotes.map((note) => (
           <button
             key={note.id}
             onClick={() => setActiveNoteId(note.id)}
             className="w-full text-left p-2.5 rounded-lg bg-white border border-border-light hover:border-coral/30 hover:shadow-sm transition-all cursor-pointer"
           >
             <div className="flex items-start gap-2">
-              <span className="text-[13px] mt-0.5 flex-shrink-0">{note.icon}</span>
+              <span className="text-[13px] mt-0.5 flex-shrink-0">{noteTypeIcon(note.note_type)}</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[12.5px] font-serif font-medium text-ink line-clamp-1">
-                  {note.title}
+                  {note.title || 'Untitled'}
                 </p>
-                <p className="text-[11px] text-ink-ghost mt-0.5">
-                  via <span className="text-ink-muted">{note.via}</span>
-                </p>
+                {note.body_text && (
+                  <p className="text-[11px] text-ink-ghost mt-0.5 line-clamp-1">
+                    {note.body_text}
+                  </p>
+                )}
               </div>
-              <StrengthBars strength={note.strength} />
+              <StrengthBars strength={noteStrength(note)} />
             </div>
           </button>
         ))}
@@ -250,6 +316,9 @@ function LinkedTab() {
 // ---------------------------------------------------------------------------
 
 function MapTab() {
+  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const { data: entity } = useEntity(selectedEntityId);
+
   return (
     <div className="px-3 pb-4">
       <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-3 mt-1">
@@ -257,7 +326,9 @@ function MapTab() {
       </h4>
       <CSSMiniMap large />
       <p className="text-[10px] text-ink-ghost text-center mt-2">
-        Showing locations linked to Priya Ratnam
+        {entity
+          ? `Showing locations linked to ${entity.name}`
+          : 'Select an entity to view their locations'}
       </p>
     </div>
   );
@@ -358,7 +429,7 @@ function StrengthBars({ strength }: { strength: 1 | 2 | 3 }) {
   );
 }
 
-function ConnectedNoteCard({ note }: { note: ConnectedNote }) {
+function ConnectedNoteCard({ note }: { note: NoteSummary }) {
   const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
 
   return (
@@ -367,19 +438,44 @@ function ConnectedNoteCard({ note }: { note: ConnectedNote }) {
       className="w-full text-left p-2.5 rounded-lg bg-white border border-border-light hover:border-coral/30 hover:shadow-sm transition-all cursor-pointer"
     >
       <div className="flex items-center gap-2">
-        <span className="text-[12px] flex-shrink-0">{note.icon}</span>
+        <span className="text-[12px] flex-shrink-0">{noteTypeIcon(note.note_type)}</span>
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-serif font-medium text-ink line-clamp-1 leading-tight">
-            {note.title}
+            {note.title || 'Untitled'}
           </p>
-          <p className="text-[10.5px] text-ink-ghost mt-0.5">
-            via <span className="text-ink-muted">{note.via}</span>
-          </p>
+          {note.body_text && (
+            <p className="text-[10.5px] text-ink-ghost mt-0.5 line-clamp-1">
+              {note.body_text}
+            </p>
+          )}
         </div>
-        <StrengthBars strength={note.strength} />
+        <StrengthBars strength={noteStrength(note)} />
       </div>
     </button>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function noteTypeIcon(noteType: string): string {
+  switch (noteType) {
+    case 'interview': return '🎙';
+    case 'photo': return '📷';
+    case 'voice_memo': return '🎤';
+    case 'field_note': return '📋';
+    default: return '📝';
+  }
+}
+
+/** Derive a 1–3 strength value from a NoteSummary. Uses is_starred and recency as proxy. */
+function noteStrength(note: NoteSummary): 1 | 2 | 3 {
+  const ageMs = Date.now() - new Date(note.created_at).getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  if (note.is_starred || ageDays < 3) return 3;
+  if (ageDays < 14) return 2;
+  return 1;
 }
 
 // ---------------------------------------------------------------------------

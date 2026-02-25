@@ -55,7 +55,9 @@ async fn search(
     Query(params): Query<SearchParams>,
 ) -> Result<Json<ApiResponse<SearchResults>>, AppError> {
     if params.q.trim().is_empty() {
-        return Err(AppError::BadRequest("Search query cannot be empty".to_string()));
+        return Err(AppError::BadRequest(
+            "Search query cannot be empty".to_string(),
+        ));
     }
 
     let notes = sqlx::query_as::<_, NoteSearchResult>(
@@ -70,7 +72,7 @@ async fn search(
            AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(body_text, '')) \
                @@ plainto_tsquery('english', $2) \
          ORDER BY rank DESC \
-         LIMIT 20"
+         LIMIT 20",
     )
     .bind(auth.workspace_id)
     .bind(&params.q)
@@ -81,7 +83,7 @@ async fn search(
         "SELECT id, name, entity_type::text, role \
          FROM entities \
          WHERE workspace_id = $1 AND name ILIKE $2 \
-         ORDER BY name ASC LIMIT 10"
+         ORDER BY name ASC LIMIT 10",
     )
     .bind(auth.workspace_id)
     .bind(format!("%{}%", &params.q))
@@ -92,7 +94,7 @@ async fn search(
         "SELECT id, name, category \
          FROM concepts \
          WHERE workspace_id = $1 AND name ILIKE $2 \
-         ORDER BY name ASC LIMIT 10"
+         ORDER BY name ASC LIMIT 10",
     )
     .bind(auth.workspace_id)
     .bind(format!("%{}%", &params.q))
@@ -107,6 +109,5 @@ async fn search(
 }
 
 pub fn routes() -> Router<PgPool> {
-    Router::new()
-        .route("/api/v1/search", get(search))
+    Router::new().route("/api/v1/search", get(search))
 }

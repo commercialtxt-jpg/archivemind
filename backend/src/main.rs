@@ -4,6 +4,7 @@ mod error;
 mod models;
 mod response;
 mod routes;
+mod seed;
 
 use std::net::SocketAddr;
 
@@ -19,8 +20,10 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "archivemind_backend=debug,tower_http=debug".into()))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "archivemind_backend=debug,tower_http=debug".into()),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -40,7 +43,12 @@ async fn main() {
     tracing::info!("Migrations applied successfully");
 
     let cors = CorsLayer::new()
-        .allow_origin(config.cors_origin.parse::<axum::http::HeaderValue>().unwrap())
+        .allow_origin(
+            config
+                .cors_origin
+                .parse::<axum::http::HeaderValue>()
+                .unwrap(),
+        )
         .allow_methods(Any)
         .allow_headers(Any);
 

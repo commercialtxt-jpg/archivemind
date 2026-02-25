@@ -22,7 +22,7 @@ async fn list_concepts(
          LEFT JOIN note_concepts nc ON nc.concept_id = c.id \
          WHERE c.workspace_id = $1 \
          GROUP BY c.id \
-         ORDER BY c.name ASC"
+         ORDER BY c.name ASC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -43,7 +43,7 @@ async fn get_concept(
          FROM concepts c \
          LEFT JOIN note_concepts nc ON nc.concept_id = c.id \
          WHERE c.id = $1 AND c.workspace_id = $2 \
-         GROUP BY c.id"
+         GROUP BY c.id",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -68,7 +68,7 @@ async fn create_concept(
     let concept = sqlx::query_as::<_, Concept>(
         "INSERT INTO concepts (workspace_id, name, category, icon) \
          VALUES ($1, $2, $3, $4) \
-         RETURNING id, workspace_id, name, category, icon, created_at, updated_at"
+         RETURNING id, workspace_id, name, category, icon, created_at, updated_at",
     )
     .bind(auth.workspace_id)
     .bind(&body.name)

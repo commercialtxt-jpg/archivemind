@@ -23,10 +23,7 @@ async fn presign_upload(
     // For now, return the key so the frontend knows where the file will be stored
     let upload_url = format!("https://s3.placeholder.local/{}", s3_key);
 
-    Ok(ApiResponse::ok(PresignResponse {
-        upload_url,
-        s3_key,
-    }))
+    Ok(ApiResponse::ok(PresignResponse { upload_url, s3_key }))
 }
 
 async fn create_media(
@@ -42,7 +39,7 @@ async fn create_media(
          VALUES ($1, $2::media_type, $3, $4, $5, $6, $7, $8, $9, $10) \
          RETURNING id, note_id, media_type::text, s3_key, original_filename, mime_type, \
          file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at"
+         transcription_status::text, transcription_text, sort_order, created_at",
     )
     .bind(body.note_id)
     .bind(&body.media_type)
@@ -69,7 +66,7 @@ async fn get_media(
         "SELECT id, note_id, media_type::text, s3_key, original_filename, mime_type, \
          file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
          transcription_status::text, transcription_text, sort_order, created_at \
-         FROM media WHERE id = $1"
+         FROM media WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&pool)
@@ -93,7 +90,7 @@ async fn update_transcription(
          WHERE id = $1 \
          RETURNING id, note_id, media_type::text, s3_key, original_filename, mime_type, \
          file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at"
+         transcription_status::text, transcription_text, sort_order, created_at",
     )
     .bind(id)
     .bind(&body.status)
@@ -110,5 +107,8 @@ pub fn routes() -> Router<PgPool> {
         .route("/api/v1/media/presign", post(presign_upload))
         .route("/api/v1/media", post(create_media))
         .route("/api/v1/media/{id}", get(get_media))
-        .route("/api/v1/media/{id}/transcription", put(update_transcription))
+        .route(
+            "/api/v1/media/{id}/transcription",
+            put(update_transcription),
+        )
 }

@@ -1,20 +1,30 @@
 import NoteTypeBadge from './NoteTypeBadge';
 import HighlightText from '../ui/HighlightText';
 import { useUIStore } from '../../stores/uiStore';
+import { useToggleStar, useRestoreNote, usePermanentDeleteNote } from '../../hooks/useNotes';
 import type { NoteSummary } from '../../types';
 
 interface NoteCardProps {
   note: NoteSummary;
   isActive: boolean;
   onClick: () => void;
+  isTrashView?: boolean;
 }
 
-export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
+export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteCardProps) {
   const searchQuery = useUIStore((s) => s.searchQuery);
+  const toggleStar = useToggleStar();
+  const restoreNote = useRestoreNote();
+  const permanentDelete = usePermanentDeleteNote();
 
   return (
-    <button
+    // Using div+role to allow nested interactive elements (star button)
+    // while keeping full keyboard + accessibility support.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
       className={`
         w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] transition-all duration-150 cursor-pointer
         ${isActive
@@ -28,6 +38,15 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
         <h3 className="flex-1 font-serif text-[13.5px] font-medium leading-[1.3] text-ink line-clamp-2">
           <HighlightText text={note.title || 'Untitled'} query={searchQuery} />
         </h3>
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleStar.mutate(note.id); }}
+          className={`text-[13px] flex-shrink-0 transition-colors cursor-pointer ${
+            note.is_starred ? 'text-amber' : 'text-ink-ghost hover:text-amber/60'
+          }`}
+          title={note.is_starred ? 'Unstar' : 'Star'}
+        >
+          {note.is_starred ? '★' : '☆'}
+        </button>
         <NoteTypeBadge type={note.note_type} />
       </div>
 
@@ -71,7 +90,27 @@ export default function NoteCard({ note, isActive, onClick }: NoteCardProps) {
           {formatRelativeTime(note.created_at)}
         </span>
       </div>
-    </button>
+
+      {/* Trash actions */}
+      {isTrashView && (
+        <div className="flex gap-2 mt-2 pt-2 border-t border-border-light">
+          <button
+            onClick={(e) => { e.stopPropagation(); restoreNote.mutate(note.id); }}
+            disabled={restoreNote.isPending}
+            className="text-[11px] text-sage hover:text-sage/80 cursor-pointer font-medium disabled:opacity-50 transition-colors"
+          >
+            ↩ Restore
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); permanentDelete.mutate(note.id); }}
+            disabled={permanentDelete.isPending}
+            className="text-[11px] text-coral hover:text-coral-light cursor-pointer font-medium disabled:opacity-50 transition-colors"
+          >
+            ✕ Delete Forever
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

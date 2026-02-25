@@ -22,7 +22,7 @@ async fn list_field_trips(
          LEFT JOIN note_field_trips nft ON nft.field_trip_id = ft.id \
          WHERE ft.workspace_id = $1 \
          GROUP BY ft.id \
-         ORDER BY ft.created_at DESC"
+         ORDER BY ft.created_at DESC",
     )
     .bind(auth.workspace_id)
     .fetch_all(&pool)
@@ -46,7 +46,7 @@ async fn create_field_trip(
     let trip = sqlx::query_as::<_, FieldTrip>(
         "INSERT INTO field_trips (workspace_id, name, icon) \
          VALUES ($1, $2, $3) \
-         RETURNING id, workspace_id, name, icon, created_at, updated_at"
+         RETURNING id, workspace_id, name, icon, created_at, updated_at",
     )
     .bind(auth.workspace_id)
     .bind(&body.name)
@@ -69,7 +69,7 @@ async fn update_field_trip(
          icon = COALESCE($4, icon), \
          updated_at = now() \
          WHERE id = $1 AND workspace_id = $2 \
-         RETURNING id, workspace_id, name, icon, created_at, updated_at"
+         RETURNING id, workspace_id, name, icon, created_at, updated_at",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -90,7 +90,7 @@ async fn associate_note(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
     // Verify field trip belongs to workspace
     let _exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM field_trips WHERE id = $1 AND workspace_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM field_trips WHERE id = $1 AND workspace_id = $2)",
     )
     .bind(id)
     .bind(auth.workspace_id)
@@ -110,7 +110,10 @@ async fn associate_note(
 
 pub fn routes() -> Router<PgPool> {
     Router::new()
-        .route("/api/v1/field-trips", get(list_field_trips).post(create_field_trip))
+        .route(
+            "/api/v1/field-trips",
+            get(list_field_trips).post(create_field_trip),
+        )
         .route("/api/v1/field-trips/{id}", put(update_field_trip))
         .route("/api/v1/field-trips/{id}/notes", post(associate_note))
 }
