@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { PlanTier } from '../../types';
+import api from '../../lib/api';
 
 interface Props {
   currentTier: PlanTier;
@@ -48,6 +50,34 @@ const rows: Array<{ label: string; key: keyof TierColumn }> = [
 ];
 
 export default function TierComparison({ currentTier }: Props) {
+  const [loadingTier, setLoadingTier] = useState<string | null>(null);
+
+  const handleUpgrade = async (tier: PlanTier) => {
+    setLoadingTier(tier);
+    try {
+      const { data } = await api.post('/billing/checkout', { tier });
+      const url = data.data?.checkout_url;
+      if (url) window.open(url, '_blank');
+    } catch {
+      // Errors are shown via the axios interceptor / toast
+    } finally {
+      setLoadingTier(null);
+    }
+  };
+
+  const handleDowngrade = async () => {
+    setLoadingTier('portal');
+    try {
+      const { data } = await api.get('/billing/portal');
+      const url = data.data?.portal_url;
+      if (url) window.open(url, '_blank');
+    } catch {
+      // 404 = no billing account
+    } finally {
+      setLoadingTier(null);
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[13px]">
@@ -101,16 +131,23 @@ export default function TierComparison({ currentTier }: Props) {
           .filter((t) => t.tier !== currentTier)
           .map((t) => {
             const isUpgrade = tiers.findIndex((x) => x.tier === t.tier) > tiers.findIndex((x) => x.tier === currentTier);
+            const isLoading = loadingTier === t.tier || loadingTier === 'portal';
             return (
               <button
                 key={t.tier}
-                className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
+                disabled={isLoading}
+                onClick={() => isUpgrade ? handleUpgrade(t.tier) : handleDowngrade()}
+                className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer disabled:opacity-50 ${
                   isUpgrade
                     ? 'bg-coral text-white hover:bg-coral-dark shadow-coral-btn'
                     : 'bg-sand text-ink-mid hover:bg-sand-dark'
                 }`}
               >
-                {isUpgrade ? `Upgrade to ${t.name}` : `Downgrade to ${t.name}`}
+                {isLoading
+                  ? 'Loading...'
+                  : isUpgrade
+                    ? `Upgrade to ${t.name}`
+                    : `Manage Subscription`}
               </button>
             );
           })}

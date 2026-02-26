@@ -7,6 +7,9 @@ pub struct Config {
     pub jwt_expiry_hours: i64,
     pub cors_origin: String,
     pub port: u16,
+    pub mapbox_monthly_cap: i64,
+    pub lemonsqueezy_webhook_secret: String,
+    pub lemonsqueezy_api_key: String,
 }
 
 impl Config {
@@ -24,6 +27,14 @@ impl Config {
                 .unwrap_or_else(|_| "8080".to_string())
                 .parse()
                 .expect("PORT must be a number"),
+            mapbox_monthly_cap: env::var("MAPBOX_MONTHLY_CAP")
+                .unwrap_or_else(|_| "50000".to_string())
+                .parse()
+                .expect("MAPBOX_MONTHLY_CAP must be a number"),
+            lemonsqueezy_webhook_secret: env::var("LEMONSQUEEZY_WEBHOOK_SECRET")
+                .unwrap_or_else(|_| String::new()),
+            lemonsqueezy_api_key: env::var("LEMONSQUEEZY_API_KEY")
+                .unwrap_or_else(|_| String::new()),
         }
     }
 }

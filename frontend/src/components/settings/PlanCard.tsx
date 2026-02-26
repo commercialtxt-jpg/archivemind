@@ -6,6 +6,7 @@ interface Props {
   limits: PlanLimits;
   usage: UsageRecord;
   planStartedAt: string | null;
+  mapBudgetPct?: number;
 }
 
 const tierLabels: Record<PlanTier, string> = {
@@ -20,7 +21,7 @@ const tierPrices: Record<PlanTier, string> = {
   team: '$39/mo per seat',
 };
 
-export default function PlanCard({ tier, limits, usage, planStartedAt }: Props) {
+export default function PlanCard({ tier, limits, usage, planStartedAt, mapBudgetPct }: Props) {
   return (
     <div className="bg-card-bg border border-border rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
@@ -47,7 +48,7 @@ export default function PlanCard({ tier, limits, usage, planStartedAt }: Props) 
       <h4 className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted mb-4">
         Current Usage
       </h4>
-      <UsageMeters usage={usage} limits={limits} />
+      <UsageMeters usage={usage} limits={limits} mapBudgetPct={mapBudgetPct} currentTier={tier} />
     </div>
   );
 }

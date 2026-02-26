@@ -1,10 +1,11 @@
 use axum::{extract::State, routing::{get, put}, Json, Router};
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, Utc};
 use sqlx::PgPool;
 
 use crate::auth::middleware::AuthUser;
 use crate::auth::password::{hash_password, verify_password};
 use crate::error::AppError;
+use crate::models::budget;
 use crate::models::plan::*;
 use crate::models::user::{User, UserProfile};
 use crate::response::ApiResponse;
@@ -50,13 +51,24 @@ struct LiveCounts {
     storage_bytes: i64,
 }
 
+/// Row for fetching grace period info alongside plan.
+#[derive(sqlx::FromRow)]
+struct PlanGraceRow {
+    plan: String,
+    plan_started_at: Option<DateTime<Utc>>,
+    plan_expires_at: Option<DateTime<Utc>>,
+    grace_period_end: Option<DateTime<Utc>>,
+    pre_grace_plan: Option<String>,
+}
+
 /// GET /api/v1/settings/plan — current plan details, limits, and usage summary
 async fn get_plan(
     auth: AuthUser,
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<UsageResponse>>, AppError> {
-    let plan_row = sqlx::query_as::<_, UserPlanRow>(
-        "SELECT plan::text, plan_started_at, plan_expires_at FROM users WHERE id = $1",
+    let plan_row = sqlx::query_as::<_, PlanGraceRow>(
+        "SELECT plan::text, plan_started_at, plan_expires_at, grace_period_end, pre_grace_plan \
+         FROM users WHERE id = $1",
     )
     .bind(auth.user_id)
     .fetch_one(&pool)
@@ -88,12 +100,18 @@ async fn get_plan(
     usage.media_uploads = usage.media_uploads.max(live.media_uploads);
     usage.storage_bytes = usage.storage_bytes.max(live.storage_bytes);
 
+    // Platform-wide map budget utilization
+    let map_budget_pct = budget::get_budget_utilization(&pool, "map_loads").await.ok();
+
     Ok(ApiResponse::ok(UsageResponse {
         plan: tier,
         limits,
         usage,
         plan_started_at: plan_row.plan_started_at,
         plan_expires_at: plan_row.plan_expires_at,
+        map_budget_pct,
+        grace_period_end: plan_row.grace_period_end,
+        pre_grace_plan: plan_row.pre_grace_plan,
     }))
 }
 

@@ -1,10 +1,12 @@
-use axum::{extract::State, http::StatusCode, routing::{get, post}, Json, Router};
+use axum::{extract::State, http::StatusCode, routing::{get, post}, Extension, Json, Router};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::config::Config;
 use crate::error::AppError;
 use crate::middleware::plan_guard;
+use crate::models::budget;
 use crate::models::map::MapLocation;
 use crate::response::ApiResponse;
 
@@ -203,8 +205,11 @@ async fn map_locations(
 async fn track_map_load(
     auth: AuthUser,
     State(pool): State<PgPool>,
+    Extension(config): Extension<Config>,
 ) -> Result<StatusCode, AppError> {
     let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "map_loads", 1).await;
+    // Also track against platform-wide Mapbox budget
+    let _ = budget::increment_platform_budget(&pool, "map_loads", config.mapbox_monthly_cap, 1).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

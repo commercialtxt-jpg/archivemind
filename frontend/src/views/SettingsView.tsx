@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { usePlan } from '../hooks/useUsage';
 import { useAuthStore } from '../stores/authStore';
+import GracePeriodBanner from '../components/settings/GracePeriodBanner';
 import PlanCard from '../components/settings/PlanCard';
 import TierComparison from '../components/settings/TierComparison';
 import api from '../lib/api';
@@ -69,13 +70,26 @@ function PlanTab({ planData, isLoading }: { planData: UsageResponse | undefined;
     return <p className="text-[13px] text-ink-muted">Unable to load plan data.</p>;
   }
 
+  const showGraceBanner =
+    planData.grace_period_end &&
+    planData.pre_grace_plan &&
+    new Date(planData.grace_period_end) > new Date();
+
   return (
     <div className="space-y-8">
+      {showGraceBanner && (
+        <GracePeriodBanner
+          gracePeriodEnd={planData.grace_period_end!}
+          preGracePlan={planData.pre_grace_plan!}
+        />
+      )}
+
       <PlanCard
         tier={planData.plan}
         limits={planData.limits}
         usage={planData.usage}
         planStartedAt={planData.plan_started_at}
+        mapBudgetPct={planData.map_budget_pct}
       />
 
       <div>

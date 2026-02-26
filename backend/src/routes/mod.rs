@@ -1,3 +1,4 @@
+pub mod billing;
 pub mod concepts;
 pub mod entities;
 pub mod field_trips;
@@ -36,6 +37,7 @@ pub fn build_router(pool: PgPool, config: Config) -> Router {
         .merge(map::routes())
         .merge(usage::routes())
         .merge(settings::routes())
+        .merge(billing::routes())
         .with_state(pool)
         .layer(axum::Extension(config))
 }

@@ -1,8 +1,10 @@
-import type { PlanLimits, UsageRecord } from '../../types';
+import type { PlanLimits, PlanTier, UsageRecord } from '../../types';
 
 interface Props {
   usage: UsageRecord;
   limits: PlanLimits;
+  mapBudgetPct?: number;
+  currentTier?: PlanTier;
 }
 
 interface MeterDef {
@@ -31,7 +33,7 @@ function meterTextColor(pct: number): string {
   return 'text-sage';
 }
 
-export default function UsageMeters({ usage, limits }: Props) {
+export default function UsageMeters({ usage, limits, mapBudgetPct, currentTier }: Props) {
   const meters: MeterDef[] = [
     { label: 'Notes', current: usage.notes_count, limit: limits.notes },
     { label: 'Entities', current: usage.entities_count, limit: limits.entities },
@@ -40,6 +42,8 @@ export default function UsageMeters({ usage, limits }: Props) {
     { label: 'Storage', current: usage.storage_bytes, limit: limits.storage_bytes, format: formatBytes },
     { label: 'AI Requests', current: usage.ai_requests, limit: limits.ai_requests },
   ];
+
+  const showBudgetWarning = mapBudgetPct != null && mapBudgetPct >= 0.8 && currentTier === 'free';
 
   return (
     <div className="space-y-4">
@@ -65,6 +69,12 @@ export default function UsageMeters({ usage, limits }: Props) {
           </div>
         );
       })}
+
+      {showBudgetWarning && (
+        <p className="text-[12px] text-amber font-medium mt-2">
+          Map access may be limited during peak usage. Upgrade for guaranteed access.
+        </p>
+      )}
     </div>
   );
 }

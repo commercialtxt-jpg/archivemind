@@ -147,6 +147,12 @@ pub struct UsageResponse {
     pub usage: UsageRecord,
     pub plan_started_at: Option<DateTime<Utc>>,
     pub plan_expires_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub map_budget_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grace_period_end: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pre_grace_plan: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

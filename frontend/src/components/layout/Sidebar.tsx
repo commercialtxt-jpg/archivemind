@@ -4,9 +4,6 @@ import { useUIStore } from '../../stores/uiStore';
 import { useNoteCounts } from '../../hooks/useNotes';
 import { useFieldTrips, useCreateFieldTrip, useDeleteFieldTrip } from '../../hooks/useFieldTrips';
 import { useConcepts, useCreateConcept, useDeleteConcept } from '../../hooks/useConcepts';
-import { useQuery } from '@tanstack/react-query';
-import api from '../../lib/api';
-import type { ApiResponse, Entity } from '../../types';
 import SyncStatus from '../ui/SyncStatus';
 
 // ---------------------------------------------------------------------------
@@ -41,42 +38,6 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const [conceptName, setConceptName] = useState('');
   const conceptInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Entity type counts ---
-  const { data: personCount } = useQuery({
-    queryKey: ['entities', 'person', 'count'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=person');
-        return data.meta?.total ?? 0;
-      } catch {
-        return 0;
-      }
-    },
-  });
-
-  const { data: locationCount } = useQuery({
-    queryKey: ['entities', 'location', 'count'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=location');
-        return data.meta?.total ?? 0;
-      } catch {
-        return 0;
-      }
-    },
-  });
-
-  const { data: artifactCount } = useQuery({
-    queryKey: ['entities', 'artifact', 'count'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiResponse<Entity[]>>('/entities?type=artifact');
-        return data.meta?.total ?? 0;
-      } catch {
-        return 0;
-      }
-    },
-  });
 
   const handleSearch = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,12 +71,6 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
     setConceptFormOpen(false);
   };
 
-  // Entity type item click — navigate to entities view filtered by type
-  const handleEntityTypeClick = (type: string, label: string) => {
-    setSidebarFilter({ type: 'entity_type', id: type, label });
-    navigate('/entities');
-    onItemClick?.();
-  };
 
   return (
     <>
@@ -298,27 +253,6 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
           )}
         </section>
 
-        {/* Entity Types — fixed categories, navigate to entities view */}
-        <section>
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted px-2 mb-2">
-            Entity Types
-          </h3>
-          <SidebarItem
-            icon="🧑" label="Interviewees" count={personCount}
-            active={isActive('entity_type', 'person')}
-            onClick={() => handleEntityTypeClick('person', 'Interviewees')}
-          />
-          <SidebarItem
-            icon="📍" label="Locations" count={locationCount}
-            active={isActive('entity_type', 'location')}
-            onClick={() => handleEntityTypeClick('location', 'Locations')}
-          />
-          <SidebarItem
-            icon="🏺" label="Artifacts" count={artifactCount}
-            active={isActive('entity_type', 'artifact')}
-            onClick={() => handleEntityTypeClick('artifact', 'Artifacts')}
-          />
-        </section>
       </div>
 
       {/* Footer: Settings (mobile drawer only) + Sync status */}

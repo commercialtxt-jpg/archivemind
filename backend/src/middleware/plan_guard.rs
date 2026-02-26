@@ -1,9 +1,10 @@
-use chrono::{Datelike, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::models::plan::{PlanLimits, PlanTier, UserPlanRow};
+use crate::models::budget;
+use crate::models::plan::{PlanLimits, PlanTier};
 
 /// Get the current period start (first day of current month).
 fn current_period_start() -> chrono::NaiveDate {
@@ -11,17 +12,84 @@ fn current_period_start() -> chrono::NaiveDate {
     chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap()
 }
 
-/// Fetch the user's plan tier from the users table.
+/// Row type for grace period query.
+#[derive(sqlx::FromRow)]
+struct GraceRow {
+    plan: String,
+    grace_period_end: Option<DateTime<Utc>>,
+    pre_grace_plan: Option<String>,
+}
+
+/// Fetch the user's plan tier from the users table, handling grace period logic.
+///
+/// - If `grace_period_end` is set and still in the future, return `pre_grace_plan` tier
+///   (the user keeps their paid plan during the grace window).
+/// - If `grace_period_end` is set and in the past, auto-downgrade to Free, clear grace fields.
 async fn get_user_tier(pool: &PgPool, user_id: Uuid) -> Result<PlanTier, AppError> {
-    let row = sqlx::query_as::<_, UserPlanRow>(
-        "SELECT plan::text, plan_started_at, plan_expires_at FROM users WHERE id = $1",
+    let row = sqlx::query_as::<_, GraceRow>(
+        "SELECT plan::text, grace_period_end, pre_grace_plan FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
+    let now = Utc::now();
+
+    if let Some(grace_end) = row.grace_period_end {
+        if now < grace_end {
+            // Still within grace period — honour the pre-grace plan
+            let tier = row
+                .pre_grace_plan
+                .as_deref()
+                .map(PlanTier::from_str)
+                .unwrap_or(PlanTier::Free);
+            return Ok(tier);
+        } else {
+            // Grace expired — auto-downgrade to Free
+            sqlx::query(
+                "UPDATE users SET plan = 'free', grace_period_end = NULL, pre_grace_plan = NULL, \
+                 plan_expires_at = now(), updated_at = now() WHERE id = $1",
+            )
+            .bind(user_id)
+            .execute(pool)
+            .await?;
+            return Ok(PlanTier::Free);
+        }
+    }
+
     Ok(PlanTier::from_str(&row.plan))
+}
+
+/// Check the platform-wide budget for a resource and enforce throttling by tier.
+///
+/// - ≥80% utilization → block Free tier
+/// - ≥95% utilization → block Free and Pro (only Team allowed)
+/// - ≥100% utilization → block everyone
+pub async fn check_platform_budget(
+    pool: &PgPool,
+    resource: &str,
+    tier: PlanTier,
+) -> Result<(), AppError> {
+    let utilization = budget::get_budget_utilization(pool, resource).await?;
+
+    if utilization >= 1.0 {
+        return Err(AppError::Forbidden(
+            "Platform resource limit reached. Maps are temporarily unavailable.".to_string(),
+        ));
+    }
+    if utilization >= 0.95 && tier != PlanTier::Team {
+        return Err(AppError::Forbidden(
+            "Maps temporarily limited to Team plans during peak usage. Upgrade for guaranteed access.".to_string(),
+        ));
+    }
+    if utilization >= 0.80 && tier == PlanTier::Free {
+        return Err(AppError::Forbidden(
+            "Maps temporarily limited on Free plan. Upgrade for guaranteed access.".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 /// Ensure or fetch the current month's usage record, creating it if absent.

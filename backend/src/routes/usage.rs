@@ -78,6 +78,9 @@ async fn get_usage(
         usage,
         plan_started_at: plan_row.plan_started_at,
         plan_expires_at: plan_row.plan_expires_at,
+        map_budget_pct: None,
+        grace_period_end: None,
+        pre_grace_plan: None,
     }))
 }
 

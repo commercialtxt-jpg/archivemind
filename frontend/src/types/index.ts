@@ -244,6 +244,9 @@ export interface UsageResponse {
   usage: UsageRecord;
   plan_started_at: string | null;
   plan_expires_at: string | null;
+  map_budget_pct?: number;
+  grace_period_end?: string;
+  pre_grace_plan?: string;
 }
 
 export interface MapLocation {

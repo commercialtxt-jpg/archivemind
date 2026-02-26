@@ -24,7 +24,8 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-fire GPS on open
   useEffect(() => {
@@ -194,34 +195,62 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
 
           {/* ── Photos ── */}
           <Section label="Photos">
+            {/* Camera input — opens rear camera on mobile */}
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
-              multiple
               capture="environment"
               className="sr-only"
               onChange={handlePhotosSelected}
             />
-            <div className="flex flex-wrap gap-2">
-              {photoPreviewUrls.map((url, i) => (
-                <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border-light">
-                  <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => removePhoto(i)}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-ink/60 text-white rounded-full
-                      text-[9px] flex items-center justify-center cursor-pointer hover:bg-ink/80"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+            {/* Gallery input — opens file picker / photo gallery */}
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={handlePhotosSelected}
+            />
+
+            {/* Photo previews */}
+            {photoPreviewUrls.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {photoPreviewUrls.map((url, i) => (
+                  <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border-light">
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-ink/60 text-white rounded-full
+                        text-[9px] flex items-center justify-center cursor-pointer hover:bg-ink/80"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Capture & upload buttons */}
+            <div className="flex gap-2">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center
-                  text-ink-ghost text-[18px] hover:border-sage hover:text-sage transition-colors cursor-pointer"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
+                  bg-sage text-white text-[13px] font-medium
+                  hover:bg-sage/90 transition-colors cursor-pointer"
               >
-                +
+                <span className="text-[15px]">📷</span>
+                Take Photo
+              </button>
+              <button
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg
+                  bg-sand text-ink-mid text-[13px] font-medium
+                  hover:bg-sand/80 transition-colors cursor-pointer"
+              >
+                <span className="text-[15px]">🖼</span>
+                Upload
               </button>
             </div>
           </Section>

@@ -17,7 +17,9 @@ export default function AppShell() {
 
   const isMobile = useIsMobile();
   const { pathname } = useLocation();
-  const showSidebar = pathname === '/' || pathname.startsWith('/journal');
+  const showSidebar =
+    pathname === '/' ||
+    pathname.startsWith('/journal');
 
   // Global plan-limit error listener
   const [limitError, setLimitError] = useState<{ resource: string; message: string } | null>(null);

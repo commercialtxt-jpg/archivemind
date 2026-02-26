@@ -2,6 +2,7 @@ import { useState } from 'react';
 import NoteList from '../components/notes/NoteList';
 import NoteEditor from '../components/notes/NoteEditor';
 import EntityPanel from '../components/entity/EntityPanel';
+import MobileEntitySheet from '../components/entity/MobileEntitySheet';
 import FAB from '../components/ui/FAB';
 import QuickCaptureModal from '../components/ui/QuickCaptureModal';
 import { useCreateNote } from '../hooks/useNotes';
@@ -30,6 +31,8 @@ export default function JournalView() {
     );
   };
 
+  const [mobileEntityOpen, setMobileEntityOpen] = useState(false);
+
   // Mobile layout: show NoteList OR NoteEditor, never both
   if (isMobile) {
     return (
@@ -38,19 +41,32 @@ export default function JournalView() {
           <NoteList onNoteSelect={() => setMobileShowEditor(true)} />
         ) : (
           <div className="flex flex-col h-full">
-            <button
-              onClick={() => setMobileShowEditor(false)}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] text-ink-muted hover:text-ink
-                border-b border-border-light bg-panel-bg shrink-0 cursor-pointer transition-colors"
-              aria-label="Back to notes list"
-            >
-              <span aria-hidden="true">&#8592;</span> Back to notes
-            </button>
+            <div className="flex items-center border-b border-border-light bg-panel-bg shrink-0">
+              <button
+                onClick={() => setMobileShowEditor(false)}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] text-ink-muted hover:text-ink
+                  cursor-pointer transition-colors"
+                aria-label="Back to notes list"
+              >
+                <span aria-hidden="true">&#8592;</span> Back to notes
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={() => setMobileEntityOpen(true)}
+                className="flex items-center gap-1 px-3 py-2.5 text-[13px] text-ink-muted hover:text-coral
+                  cursor-pointer transition-colors"
+                aria-label="Open context panel"
+              >
+                <span className="text-[15px]">&#8505;</span>
+                <span className="text-[12px]">Context</span>
+              </button>
+            </div>
             <div className="flex-1 min-h-0">
               <NoteEditor />
             </div>
           </div>
         )}
+        <MobileEntitySheet open={mobileEntityOpen} onClose={() => setMobileEntityOpen(false)} />
         <FAB
           onNewNote={handleNewNote}
           isCreating={createNote.isPending}
