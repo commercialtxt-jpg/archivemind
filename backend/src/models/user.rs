@@ -14,8 +14,9 @@ pub struct User {
     pub plan: String,
     pub plan_started_at: Option<DateTime<Utc>>,
     pub plan_expires_at: Option<DateTime<Utc>>,
-    pub stripe_customer_id: Option<String>,
-    pub stripe_subscription_id: Option<String>,
+    pub lemonsqueezy_customer_id: Option<String>,
+    pub lemonsqueezy_subscription_id: Option<String>,
+    pub lemonsqueezy_variant_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

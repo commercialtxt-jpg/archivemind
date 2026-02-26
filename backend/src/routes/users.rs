@@ -46,7 +46,7 @@ async fn register(
         "INSERT INTO users (email, password_hash, display_name, avatar_initials)
          VALUES ($1, $2, $3, $4)
          RETURNING id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
-         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id",
+         plan::text, plan_started_at, plan_expires_at, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, lemonsqueezy_variant_id",
     )
     .bind(&body.email)
     .bind(&password_hash)
@@ -97,7 +97,7 @@ async fn login(
 ) -> Result<Json<AuthResponse>, AppError> {
     let user = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
-         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id \
+         plan::text, plan_started_at, plan_expires_at, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, lemonsqueezy_variant_id \
          FROM users WHERE email = $1"
     )
         .bind(&body.email)
@@ -134,7 +134,7 @@ async fn login(
 async fn me(auth: AuthUser, State(pool): State<PgPool>) -> Result<Json<UserProfile>, AppError> {
     let user = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
-         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id \
+         plan::text, plan_started_at, plan_expires_at, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, lemonsqueezy_variant_id \
          FROM users WHERE id = $1"
     )
         .bind(auth.user_id)

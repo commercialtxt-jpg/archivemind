@@ -61,7 +61,7 @@ async fn update_profile(
          updated_at = now() \
          WHERE id = $1 \
          RETURNING id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
-         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id",
+         plan::text, plan_started_at, plan_expires_at, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, lemonsqueezy_variant_id",
     )
     .bind(auth.user_id)
     .bind(&body.display_name)
@@ -93,7 +93,7 @@ async fn change_password(
     // Fetch current hash
     let user = sqlx::query_as::<_, User>(
         "SELECT id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
-         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id \
+         plan::text, plan_started_at, plan_expires_at, lemonsqueezy_customer_id, lemonsqueezy_subscription_id, lemonsqueezy_variant_id \
          FROM users WHERE id = $1"
     )
         .bind(auth.user_id)

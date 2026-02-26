@@ -25,12 +25,12 @@ const tiers: TierColumn[] = [
     workspaces: '1', teamMembers: '1',
   },
   {
-    tier: 'pro', name: 'Pro', price: '$9/mo', mapLoads: '2,000', storage: '5 GB',
+    tier: 'pro', name: 'Pro', price: '$12/mo', mapLoads: '2,000', storage: '5 GB',
     notes: 'Unlimited', entities: 'Unlimited', mediaUploads: '500', ai: 'Basic',
     workspaces: '1', teamMembers: '1',
   },
   {
-    tier: 'team', name: 'Team', price: '$29/mo/seat', mapLoads: '10,000', storage: '25 GB',
+    tier: 'team', name: 'Team', price: '$39/mo/seat', mapLoads: '10,000', storage: '25 GB',
     notes: 'Unlimited', entities: 'Unlimited', mediaUploads: '2,000', ai: 'Full',
     workspaces: '5', teamMembers: '10',
   },

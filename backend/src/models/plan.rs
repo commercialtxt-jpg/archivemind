@@ -67,7 +67,7 @@ impl PlanLimits {
                 ai_requests: 100,
                 workspaces: 1,
                 team_members: 1,
-                price_cents: 900,
+                price_cents: 1200,
             },
             PlanTier::Team => Self {
                 tier,
@@ -79,7 +79,7 @@ impl PlanLimits {
                 ai_requests: 500,
                 workspaces: 5,
                 team_members: 10,
-                price_cents: 2900,
+                price_cents: 3900,
             },
         }
     }

@@ -16,8 +16,8 @@ const tierLabels: Record<PlanTier, string> = {
 
 const tierPrices: Record<PlanTier, string> = {
   free: '$0/mo',
-  pro: '$9/mo',
-  team: '$29/mo per seat',
+  pro: '$12/mo',
+  team: '$39/mo per seat',
 };
 
 export default function PlanCard({ tier, limits, usage, planStartedAt }: Props) {
