@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
@@ -792,18 +792,20 @@ function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniM
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const mapReadyRef = useRef(false);
 
   const token = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
   const hasToken = !!token;
 
-  useEffect(() => {
-    if (!containerRef.current || !hasToken) return;
+  // Stabilise location IDs so marker effect doesn't re-run on every render
+  const locationIds = useMemo(
+    () => locations.map((l) => l.id).join(','),
+    [locations],
+  );
 
-    // Destroy previous map if re-mounting
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
+  // Initialise the map ONCE
+  useEffect(() => {
+    if (!containerRef.current || !hasToken || mapRef.current) return;
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
@@ -817,13 +819,30 @@ function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniM
     mapRef.current = map;
 
     map.on('load', () => {
+      mapReadyRef.current = true;
+    });
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+      mapReadyRef.current = false;
+    };
+  }, [hasToken]);
+
+  // Update markers when locations change (no new map instance)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const updateMarkers = () => {
       // Remove stale markers
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
 
       if (locations.length === 0) return;
 
-      // Add markers
       const bounds = new mapboxgl.LngLatBounds();
       locations.forEach((loc) => {
         const color = pinColorForLoc(loc);
@@ -841,23 +860,21 @@ function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniM
         bounds.extend([loc.lng, loc.lat]);
       });
 
-      // Fit bounds to markers
       if (locations.length === 1) {
         map.setCenter([locations[0].lng, locations[0].lat]);
         map.setZoom(9);
       } else if (locations.length > 1) {
         map.fitBounds(bounds, { padding: 32, maxZoom: 12, animate: false });
       }
-    });
-
-    return () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      map.remove();
-      mapRef.current = null;
     };
+
+    if (mapReadyRef.current) {
+      updateMarkers();
+    } else {
+      map.on('load', updateMarkers);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasToken, JSON.stringify(locations.map((l) => l.id))]);
+  }, [hasToken, locationIds]);
 
   if (!hasToken) {
     return (
