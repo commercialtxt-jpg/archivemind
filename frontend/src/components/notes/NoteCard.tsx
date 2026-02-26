@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import NoteTypeBadge from './NoteTypeBadge';
 import HighlightText from '../ui/HighlightText';
 import { useUIStore } from '../../stores/uiStore';
@@ -16,6 +17,14 @@ export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteC
   const toggleStar = useToggleStar();
   const restoreNote = useRestoreNote();
   const permanentDelete = usePermanentDeleteNote();
+  const [starBouncing, setStarBouncing] = useState(false);
+
+  const handleStarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStarBouncing(true);
+    toggleStar.mutate(note.id);
+    setTimeout(() => setStarBouncing(false), 350);
+  };
 
   return (
     // Using div+role to allow nested interactive elements (star button)
@@ -26,7 +35,7 @@ export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteC
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
       className={`
-        w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] transition-all duration-150 cursor-pointer
+        w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] cursor-pointer note-card-lift
         ${isActive
           ? 'bg-card-bg border-border shadow-card-active'
           : 'bg-transparent border-transparent hover:bg-white/70'
@@ -39,11 +48,13 @@ export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteC
           <HighlightText text={note.title || 'Untitled'} query={searchQuery} />
         </h3>
         <button
-          onClick={(e) => { e.stopPropagation(); toggleStar.mutate(note.id); }}
-          className={`text-[13px] flex-shrink-0 transition-colors cursor-pointer ${
+          onClick={handleStarClick}
+          className={`text-[13px] flex-shrink-0 cursor-pointer transition-colors ${
             note.is_starred ? 'text-amber' : 'text-ink-ghost hover:text-amber/60'
-          }`}
+          } ${starBouncing ? 'animate-star-bounce' : ''}`}
           title={note.is_starred ? 'Unstar' : 'Star'}
+          aria-label={note.is_starred ? 'Remove from starred' : 'Add to starred'}
+          aria-pressed={note.is_starred}
         >
           {note.is_starred ? '★' : '☆'}
         </button>

@@ -61,6 +61,12 @@
   --animate-fade-in: fade-in 0.25s ease;
   --animate-slide-up: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-scale-in: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-right: slide-in-right 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-out-right: slide-out-right 0.18s ease-in forwards;
+  --animate-star-bounce: star-bounce 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  --animate-note-enter: note-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-sync-progress: sync-progress 1.6s ease-in-out infinite;
+  --animate-view-fade: view-fade 0.15s ease;
 }
 
 @keyframes pulse-sync {
@@ -91,6 +97,49 @@
 @keyframes scale-in {
   from { opacity: 0; transform: scale(0.92); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(20px); }
+}
+
+@keyframes star-bounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.4); }
+  60%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+@keyframes note-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sync-progress {
+  0%   { transform: scaleX(0); }
+  50%  { transform: scaleX(0.7); }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes view-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-content-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* ─── Base Styles ─── */
@@ -274,4 +323,57 @@ html, body, #root {
 /* Sidebar filter active state — smooth transition */
 .sidebar-filter-item {
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Toast notification — slides in from right */
+.animate-slide-in-right {
+  animation: var(--animate-slide-in-right);
+}
+
+.animate-slide-out-right {
+  animation: var(--animate-slide-out-right);
+}
+
+/* Star toggle bounce */
+.animate-star-bounce {
+  animation: var(--animate-star-bounce);
+}
+
+/* Note card staggered entrance */
+.animate-note-enter {
+  animation: var(--animate-note-enter);
+}
+
+/* Sync progress bar */
+.animate-sync-progress {
+  animation: var(--animate-sync-progress);
+}
+
+/* View transition fade */
+.animate-view-fade {
+  animation: var(--animate-view-fade);
+}
+
+/* Modal backdrop */
+.animate-modal-backdrop {
+  animation: modal-backdrop-in 0.2s ease;
+}
+
+/* Modal content */
+.animate-modal-content {
+  animation: modal-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Note card hover lift — smooth shadow transition */
+.note-card-lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.note-card-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+}
+
+/* View wrapper — fade in on mount */
+.view-enter {
+  animation: view-fade 0.15s ease;
 }

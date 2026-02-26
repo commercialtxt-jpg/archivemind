@@ -17,16 +17,6 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 
-// Mock mock data (so tests are independent of static fixtures)
-vi.mock('../../lib/mockData', () => ({
-  getMockNotes: () => ({
-    data: [] as NoteSummary[],
-    meta: { total: 0 },
-  }),
-  getMockNote: () => null,
-  getMockNoteCounts: () => ({ total: 0, starred: 0, deleted: 0 }),
-}));
-
 import api from '../../lib/api';
 const mockApi = vi.mocked(api);
 

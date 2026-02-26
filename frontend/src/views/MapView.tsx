@@ -2,7 +2,7 @@ import FullMap from '../components/map/FullMap';
 
 export default function MapView() {
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full view-enter">
       <FullMap />
     </div>
   );

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { ApiResponse, SearchResults } from '../types';
-import { getMockSearchResults } from '../lib/mockData';
+
+const emptyResults: SearchResults = { notes: [], entities: [], concepts: [] };
 
 export function useSearch(query: string) {
   return useQuery({
@@ -9,9 +10,9 @@ export function useSearch(query: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<SearchResults>>(`/search?q=${encodeURIComponent(query)}`);
-        return data.data ?? { notes: [], entities: [], concepts: [] };
+        return data.data ?? emptyResults;
       } catch {
-        return getMockSearchResults(query);
+        return emptyResults;
       }
     },
     enabled: query.length >= 2,

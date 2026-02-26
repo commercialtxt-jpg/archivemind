@@ -7,6 +7,7 @@ import EntitiesView from '../views/EntitiesView';
 import InventoryView from '../views/InventoryView';
 import RoutinesView from '../views/RoutinesView';
 import LoginPage from '../views/LoginPage';
+import ProtectedRoute from './ProtectedRoute';
 
 export const router = createBrowserRouter([
   {
@@ -15,7 +16,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <Navigate to="/journal" replace /> },
       { path: 'journal', element: <JournalView /> },

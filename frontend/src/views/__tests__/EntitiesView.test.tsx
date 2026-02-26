@@ -20,45 +20,58 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 
-vi.mock('../../lib/mockData', () => ({
-  getMockEntities: (): ApiResponse<EntityWithStats[]> => ({
-    data: [
-      {
-        id: 'entity-1',
-        workspace_id: 'ws-1',
-        name: 'Priya Ratnam',
-        entity_type: 'person',
-        role: 'Ayurvedic Practitioner',
-        avatar_initials: 'PR',
-        total_mentions: 12,
-        session_count: 5,
-        concept_count: 3,
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      {
-        id: 'entity-2',
-        workspace_id: 'ws-1',
-        name: 'Kandy Highlands',
-        entity_type: 'location',
-        role: null,
-        avatar_initials: 'KH',
-        total_mentions: 8,
-        session_count: 3,
-        concept_count: 2,
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-    ],
-    meta: { total: 2 },
-  }),
-  getMockEntity: () => null,
-  getMockEntityTopics: () => [],
-  getMockEntityNotes: () => [],
-}));
-
 import api from '../../lib/api';
 const mockApi = vi.mocked(api);
+
+// Stub useUIStore — EntitiesView calls setSelectedEntityId and setActiveView
+vi.mock('../../stores/uiStore', () => ({
+  useUIStore: (selector: (s: {
+    setSelectedEntityId: () => void;
+    setActiveView: () => void;
+  }) => unknown) =>
+    selector({
+      setSelectedEntityId: vi.fn(),
+      setActiveView: vi.fn(),
+    }),
+}));
+
+// ---------------------------------------------------------------------------
+// Test fixtures
+// ---------------------------------------------------------------------------
+
+const ENTITIES: EntityWithStats[] = [
+  {
+    id: 'entity-1',
+    workspace_id: 'ws-1',
+    name: 'Priya Ratnam',
+    entity_type: 'person',
+    role: 'Ayurvedic Practitioner',
+    avatar_initials: 'PR',
+    total_mentions: 12,
+    session_count: 5,
+    concept_count: 3,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'entity-2',
+    workspace_id: 'ws-1',
+    name: 'Kandy Highlands',
+    entity_type: 'location',
+    role: null,
+    avatar_initials: 'KH',
+    total_mentions: 8,
+    session_count: 3,
+    concept_count: 2,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+const ENTITIES_RESPONSE: ApiResponse<EntityWithStats[]> = {
+  data: ENTITIES,
+  meta: { total: 2 },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,18 +92,6 @@ function freshClient() {
   });
 }
 
-// Stub useUIStore — EntitiesView calls setSelectedEntityId and setActiveView
-vi.mock('../../stores/uiStore', () => ({
-  useUIStore: (selector: (s: {
-    setSelectedEntityId: () => void;
-    setActiveView: () => void;
-  }) => unknown) =>
-    selector({
-      setSelectedEntityId: vi.fn(),
-      setActiveView: vi.fn(),
-    }),
-}));
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -98,11 +99,11 @@ vi.mock('../../stores/uiStore', () => ({
 describe('EntitiesView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Make API fail so we use mock data
-    mockApi.get.mockRejectedValue(new Error('No backend'));
+    // Default: API succeeds with two entities
+    mockApi.get.mockResolvedValue({ data: ENTITIES_RESPONSE });
   });
 
-  it('renders entity cards from mock data', async () => {
+  it('renders entity cards from API data', async () => {
     const client = freshClient();
     render(<EntitiesView />, { wrapper: makeWrapper(client) });
 
@@ -153,22 +154,17 @@ describe('EntitiesView', () => {
     });
   });
 
-  it('shows "No entities found" when list is empty', async () => {
-    // Return empty data
-    mockApi.get.mockResolvedValueOnce({
+  it('shows empty state when list is empty', async () => {
+    mockApi.get.mockResolvedValue({
       data: { data: [], meta: { total: 0 } },
     });
 
     const client = freshClient();
     render(<EntitiesView />, { wrapper: makeWrapper(client) });
 
-    // With empty API response (not mock fallback), we get empty
     await waitFor(() => {
-      // Either no entities card or the empty state text is shown
-      const emptyEl = screen.queryByText('No entities found.');
-      const entityCard = screen.queryByText('Priya Ratnam');
-      // One of these conditions should hold
-      expect(emptyEl !== null || entityCard !== null).toBe(true);
+      const emptyEl = screen.queryByText('No entities yet');
+      expect(emptyEl).not.toBeNull();
     });
   });
 });

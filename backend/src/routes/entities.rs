@@ -159,11 +159,16 @@ async fn entity_notes(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Vec<NoteSummary>>>, AppError> {
     let notes = sqlx::query_as::<_, NoteSummary>(
-        "SELECT n.id, n.workspace_id, n.title, n.body_text, n.note_type::text, n.is_starred, \
-         n.location_name, n.gps_coords, n.weather, n.created_at, n.updated_at \
+        "SELECT n.id, n.workspace_id, n.title, n.body_text, n.note_type::text AS note_type, n.is_starred, \
+         n.location_name, n.gps_coords, n.weather, \
+         COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::TEXT[]) AS tags, \
+         n.created_at, n.updated_at \
          FROM notes n \
          JOIN note_entities ne ON ne.note_id = n.id \
+         LEFT JOIN note_tags nt ON nt.note_id = n.id \
+         LEFT JOIN tags t ON t.id = nt.tag_id \
          WHERE ne.entity_id = $1 AND n.workspace_id = $2 AND n.deleted_at IS NULL \
+         GROUP BY n.id \
          ORDER BY n.created_at DESC",
     )
     .bind(id)

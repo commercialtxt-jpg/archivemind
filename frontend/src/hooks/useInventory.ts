@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { ApiResponse, InventoryItem } from '../types';
-import { getMockInventory } from '../lib/mockData';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,7 +23,7 @@ export function useInventory() {
         const { data } = await api.get<ApiResponse<InventoryItem[]>>('/inventory');
         return data;
       } catch {
-        return getMockInventory();
+        return { data: [] as InventoryItem[] };
       }
     },
   });
@@ -40,6 +39,8 @@ export function useCreateInventoryItem() {
     mutationFn: async (body: {
       name: string;
       icon?: string;
+      category?: string;
+      notes?: string;
       status?: string;
       sort_order?: number;
     }) => {
@@ -56,6 +57,8 @@ export function useCreateInventoryItem() {
         workspace_id: '',
         name: variables.name,
         icon: variables.icon ?? '📦',
+        category: variables.category ?? 'general',
+        notes: variables.notes ?? null,
         status: variables.status ?? 'packed',
         sort_order: variables.sort_order ?? 0,
         created_at: new Date().toISOString(),
@@ -96,6 +99,8 @@ export function useUpdateInventoryItem() {
       id: string;
       name?: string;
       icon?: string;
+      category?: string;
+      notes?: string;
       status?: string;
       sort_order?: number;
     }) => {

@@ -3,6 +3,7 @@ pub mod entity;
 pub mod field_trip;
 pub mod graph;
 pub mod inventory;
+pub mod map;
 pub mod media;
 pub mod note;
 pub mod routine;

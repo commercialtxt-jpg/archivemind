@@ -15,24 +15,19 @@ async fn get_graph(
     State(pool): State<PgPool>,
     Query(params): Query<GraphFilter>,
 ) -> Result<Json<ApiResponse<GraphData>>, AppError> {
+    let filter = params.filter.as_deref().unwrap_or("all");
+
+    let include_entities = matches!(filter, "entities" | "all");
+    let include_concepts = matches!(filter, "concepts" | "all");
+    let include_locations = matches!(filter, "locations" | "all");
+
     let mut nodes: Vec<GraphNode> = Vec::new();
 
-    let include_entities = matches!(
-        params.filter.as_deref(),
-        None | Some("interviews") | Some("all")
-    );
-    let include_concepts = matches!(
-        params.filter.as_deref(),
-        None | Some("concepts") | Some("all")
-    );
-    let include_locations = matches!(
-        params.filter.as_deref(),
-        None | Some("locations") | Some("all")
-    );
-
-    // Fetch entity nodes (persons, artifacts)
+    // ---------------------------------------------------------------
+    // Entity nodes (persons, artifacts)
+    // ---------------------------------------------------------------
     if include_entities {
-        let entities = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
+        let rows = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
             "SELECT e.id, e.name, e.entity_type::text \
              FROM entities e \
              WHERE e.workspace_id = $1 AND e.entity_type::text IN ('person', 'artifact')",
@@ -41,9 +36,9 @@ async fn get_graph(
         .fetch_all(&pool)
         .await?;
 
-        for (id, name, entity_type) in entities {
-            let count = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM note_entities WHERE entity_id = $1",
+        for (id, name, entity_type) in rows {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(SUM(mention_count), 0) FROM note_entities WHERE entity_id = $1",
             )
             .bind(id)
             .fetch_one(&pool)
@@ -53,15 +48,18 @@ async fn get_graph(
             nodes.push(GraphNode {
                 id,
                 label: name,
-                node_type: entity_type,
+                node_type: "entity".to_string(),
+                entity_type,
                 note_count: count,
             });
         }
     }
 
-    // Fetch location nodes
+    // ---------------------------------------------------------------
+    // Location nodes (entity_type = 'location')
+    // ---------------------------------------------------------------
     if include_locations {
-        let locations = sqlx::query_as::<_, (uuid::Uuid, String)>(
+        let rows = sqlx::query_as::<_, (uuid::Uuid, String)>(
             "SELECT e.id, e.name \
              FROM entities e \
              WHERE e.workspace_id = $1 AND e.entity_type::text = 'location'",
@@ -70,9 +68,9 @@ async fn get_graph(
         .fetch_all(&pool)
         .await?;
 
-        for (id, name) in locations {
-            let count = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM note_entities WHERE entity_id = $1",
+        for (id, name) in rows {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(SUM(mention_count), 0) FROM note_entities WHERE entity_id = $1",
             )
             .bind(id)
             .fetch_one(&pool)
@@ -83,57 +81,61 @@ async fn get_graph(
                 id,
                 label: name,
                 node_type: "location".to_string(),
+                entity_type: "location".to_string(),
                 note_count: count,
             });
         }
     }
 
-    // Fetch concept nodes
+    // ---------------------------------------------------------------
+    // Concept nodes
+    // ---------------------------------------------------------------
     if include_concepts {
-        let concepts = sqlx::query_as::<_, (uuid::Uuid, String)>(
+        let rows = sqlx::query_as::<_, (uuid::Uuid, String)>(
             "SELECT c.id, c.name FROM concepts c WHERE c.workspace_id = $1",
         )
         .bind(auth.workspace_id)
         .fetch_all(&pool)
         .await?;
 
-        for (id, name) in concepts {
-            let count = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM note_concepts WHERE concept_id = $1",
-            )
-            .bind(id)
-            .fetch_one(&pool)
-            .await
-            .unwrap_or(0);
+        for (id, name) in rows {
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM note_concepts WHERE concept_id = $1")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap_or(0);
 
             nodes.push(GraphNode {
                 id,
                 label: name,
                 node_type: "concept".to_string(),
+                entity_type: String::new(),
                 note_count: count,
             });
         }
     }
 
-    // Fetch edges
+    // ---------------------------------------------------------------
+    // Edges — only include edges where both endpoints are in our node set
+    // ---------------------------------------------------------------
     let node_ids: Vec<uuid::Uuid> = nodes.iter().map(|n| n.id).collect();
-    let edges = if node_ids.is_empty() {
+    let edges: Vec<GraphEdgeOut> = if node_ids.is_empty() {
         vec![]
     } else {
-        let raw_edges = sqlx::query_as::<_, GraphEdge>(
+        let raw = sqlx::query_as::<_, GraphEdge>(
             "SELECT id, workspace_id, source_type, source_id, target_type, target_id, \
-                    edge_type::text as edge_type, strength, label, is_dashed, created_at, updated_at \
+                    edge_type::text AS edge_type, strength, label, is_dashed, created_at, updated_at \
              FROM graph_edges \
              WHERE workspace_id = $1 \
-               AND source_id = ANY($2) AND target_id = ANY($2)"
+               AND source_id = ANY($2) AND target_id = ANY($2)",
         )
         .bind(auth.workspace_id)
         .bind(&node_ids)
         .fetch_all(&pool)
         .await?;
 
-        raw_edges
-            .into_iter()
+        raw.into_iter()
             .map(|e| GraphEdgeOut {
                 id: e.id,
                 source: e.source_id,

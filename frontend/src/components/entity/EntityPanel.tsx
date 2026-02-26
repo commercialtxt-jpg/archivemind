@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useEntity, useEntityTopics, useEntityNotes } from '../../hooks/useEntities';
-import { useInventory } from '../../hooks/useInventory';
+import { useInventory, useUpdateInventoryItem } from '../../hooks/useInventory';
+import { useMapLocations } from '../../hooks/useMap';
 import type { InventoryItem, NoteSummary } from '../../types';
 
 type Tab = 'entity' | 'linked' | 'map' | 'gear';
@@ -11,7 +13,32 @@ export default function EntityPanel() {
   const { entityPanelOpen, toggleEntityPanel } = useUIStore();
   const [activeTab, setActiveTab] = useState<Tab>('entity');
 
-  if (!entityPanelOpen) return null;
+  if (!entityPanelOpen) {
+    return (
+      <button
+        onClick={toggleEntityPanel}
+        title="Open Context Panel"
+        className="flex-shrink-0 w-8 bg-panel-bg border-l border-border flex flex-col items-center justify-center gap-3 cursor-pointer group hover:bg-parchment transition-colors"
+        style={{ minHeight: 0 }}
+      >
+        {/* Expand arrow */}
+        <span
+          className="text-ink-muted group-hover:text-coral transition-colors text-[13px] font-bold leading-none select-none"
+          aria-hidden="true"
+        >
+          ↙
+        </span>
+
+        {/* Vertical label */}
+        <span
+          className="text-[9.5px] font-semibold text-ink-ghost group-hover:text-ink-muted uppercase tracking-[0.12em] transition-colors select-none"
+          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)' }}
+        >
+          Context
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div className="w-[280px] flex-shrink-0 border-l border-border bg-parchment flex flex-col overflow-hidden">
@@ -21,7 +48,7 @@ export default function EntityPanel() {
         <div className="flex items-center gap-1">
           <button
             onClick={toggleEntityPanel}
-            className="w-6 h-6 flex items-center justify-center text-ink-muted hover:text-ink rounded transition-colors text-[12px]"
+            className="w-6 h-6 flex items-center justify-center text-ink-muted hover:text-coral hover:bg-coral/10 rounded transition-colors text-[13px] cursor-pointer"
             title="Collapse panel"
           >
             ↗
@@ -172,17 +199,7 @@ function EntityTab() {
       )}
 
       {/* ── Location mini-map ── */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest flex items-center gap-1">
-            <span>📍</span> Location
-          </span>
-          <button className="text-[11px] text-ink-muted hover:text-ink cursor-pointer transition-colors">
-            ⤢
-          </button>
-        </div>
-        <CSSMiniMap />
-      </div>
+      <EntityTabMiniMap entityId={selectedEntityId} entityNotes={entityNotes} />
 
       {/* ── Inventory alert ── */}
       {needsAttention.length > 0 && (
@@ -318,13 +335,29 @@ function LinkedTab() {
 function MapTab() {
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const { data: entity } = useEntity(selectedEntityId);
+  const { data: entityNotes } = useEntityNotes(selectedEntityId);
+  const { data: mapLocations = [] } = useMapLocations();
+
+  // Collect note source_ids for the selected entity's notes
+  const entityNoteIds = new Set((entityNotes ?? []).map((n) => n.id));
+  // Find map locations for those notes + the entity itself
+  const relevantLocations = mapLocations.filter(
+    (l) =>
+      (l.source_type === 'entity' && l.source_id === selectedEntityId) ||
+      (l.source_type === 'note' && entityNoteIds.has(l.source_id)),
+  );
 
   return (
     <div className="px-3 pb-4">
       <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-3 mt-1">
         Location Map
       </h4>
-      <CSSMiniMap large />
+      <CSSMiniMap
+        large
+        activeEntityName={entity?.name}
+        activeEntityId={selectedEntityId ?? undefined}
+        locations={relevantLocations}
+      />
       <p className="text-[10px] text-ink-ghost text-center mt-2">
         {entity
           ? `Showing locations linked to ${entity.name}`
@@ -339,10 +372,113 @@ function MapTab() {
 // ---------------------------------------------------------------------------
 
 function GearTab() {
+  const { data: inventoryRes } = useInventory();
+  const updateItem = useUpdateInventoryItem();
+  const navigate   = useNavigate();
+
+  const items      = inventoryRes?.data ?? [];
+  const badStatuses = ['low', 'missing'];
+  const alertItems = items.filter((i) => badStatuses.includes(i.status));
+  const readyCount = items.filter((i) => !badStatuses.includes(i.status)).length;
+  const pct        = items.length > 0 ? Math.round((readyCount / items.length) * 100) : 0;
+
+  const STATUS_CYCLE = ['packed', 'ready', 'charged', 'low', 'missing'];
+  const cycleStatus  = (id: string, current: string) => {
+    const idx  = STATUS_CYCLE.indexOf(current);
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    updateItem.mutate({ id, status: next });
+  };
+
+  if (items.length === 0) {
+    return (
+      <div className="px-3 pb-4">
+        <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+          <span className="text-2xl">🎒</span>
+          <p className="text-[12px] text-ink-ghost leading-snug max-w-[180px]">
+            No inventory items yet.{' '}
+            <button
+              onClick={() => navigate('/inventory')}
+              className="text-coral hover:underline cursor-pointer"
+            >
+              Add items
+            </button>
+            {' '}to track your field kit.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
-      <span className="text-2xl mb-2">⚙</span>
-      Entity settings coming soon
+    <div className="px-3 pb-4 space-y-3">
+      {/* Summary stats */}
+      <div className="bg-white p-3 rounded-lg border border-border-light">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[12px] font-semibold text-ink">🎒 Field Kit</span>
+          <button
+            onClick={() => navigate('/inventory')}
+            className="text-[10px] text-coral hover:text-coral-dark cursor-pointer font-medium"
+          >
+            View all →
+          </button>
+        </div>
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-[13px] font-semibold text-sage font-mono">{readyCount}/{items.length}</span>
+          <span className="text-[11px] text-ink-ghost">ready</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-sand overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${pct}%`,
+              background: pct === 100 ? 'var(--color-sage)' : pct >= 70 ? 'var(--color-amber)' : 'var(--color-coral)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Alert items */}
+      {alertItems.length > 0 && (
+        <div>
+          <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
+            Needs Attention
+          </h4>
+          <div className="space-y-1.5">
+            {alertItems.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-border-light">
+                <span className="text-[14px] flex-shrink-0">{item.icon}</span>
+                <span className="flex-1 text-[12px] text-ink truncate">{item.name}</span>
+                <button
+                  onClick={() => cycleStatus(item.id, item.status)}
+                  title="Click to change status"
+                  className={`
+                    text-[9px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border cursor-pointer transition-all hover:opacity-75
+                    ${item.status === 'missing' ? 'bg-coral/10 text-coral border-coral/25' : 'bg-amber/10 text-amber border-amber/25'}
+                  `}
+                >
+                  {item.status}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All items (collapsed view) */}
+      <div>
+        <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2">
+          All Items
+        </h4>
+        <div className="space-y-1">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 text-[11.5px]">
+              <span className="text-[12px] w-4 text-center flex-shrink-0">{item.icon}</span>
+              <span className="flex-1 text-ink-mid truncate">{item.name}</span>
+              <InventoryStatusBadge status={item.status} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -480,25 +616,85 @@ function noteStrength(note: NoteSummary): 1 | 2 | 3 {
 
 // ---------------------------------------------------------------------------
 // CSS-drawn mini map (no Mapbox — purely CSS/SVG with location pins)
+// Uses real data from useMapLocations when available, falls back to static pins.
 // ---------------------------------------------------------------------------
 
-interface MapPin {
+import type { MapLocation } from '../../types';
+
+// Approximate (x%, y%) positions within a 100×100 viewBox
+// for known Sri Lanka locations (used as fallback and for entity matching)
+const LOCATION_POSITIONS: Record<string, { x: number; y: number }> = {
+  kandy: { x: 52, y: 30 },
+  'kandy highlands': { x: 52, y: 30 },
+  galle: { x: 38, y: 72 },
+  'galle coastal': { x: 38, y: 72 },
+  ella: { x: 64, y: 65 },
+  'ella caves': { x: 64, y: 65 },
+  peradeniya: { x: 48, y: 32 },
+  colombo: { x: 22, y: 55 },
+};
+
+function nameToPos(name: string): { x: number; y: number } | null {
+  return LOCATION_POSITIONS[name.toLowerCase()] ?? null;
+}
+
+interface MiniMapPin {
   label: string;
-  x: number; // percentage
+  x: number;
   y: number;
   color: string;
   active?: boolean;
 }
 
-const MAP_PINS: MapPin[] = [
-  { label: 'Kandy', x: 52, y: 30, color: 'var(--color-coral)', active: true },
-  { label: 'Galle', x: 38, y: 72, color: 'var(--color-sage)' },
-  { label: 'Ella', x: 64, y: 65, color: 'var(--color-amber)' },
-  { label: 'Colombo', x: 22, y: 55, color: 'var(--color-sage)' },
-];
+interface CSSMiniMapProps {
+  large?: boolean;
+  activeEntityName?: string;
+  activeEntityId?: string;
+  locations?: MapLocation[];
+}
 
-function CSSMiniMap({ large = false }: { large?: boolean }) {
+function CSSMiniMap({ large = false, activeEntityName, locations }: CSSMiniMapProps) {
   const height = large ? 200 : 130;
+
+  // Build pins from real location data if provided, otherwise use static fallback
+  let pins: MiniMapPin[] = [];
+
+  if (locations && locations.length > 0) {
+    pins = locations
+      .map((loc): MiniMapPin | null => {
+        const pos = nameToPos(loc.location_name ?? loc.name);
+        if (!pos) return null;
+        const isActive =
+          (activeEntityName && loc.name.toLowerCase() === activeEntityName.toLowerCase()) ||
+          loc.source_type === 'entity';
+        return {
+          label: loc.name,
+          x: pos.x,
+          y: pos.y,
+          color: isActive ? 'var(--color-coral)' : loc.source_type === 'entity' ? 'var(--color-sage)' : 'var(--color-amber)',
+          active: !!isActive,
+        };
+      })
+      .filter((p): p is MiniMapPin => p !== null);
+  }
+
+  // Deduplicate by label (same location may appear from multiple notes)
+  const seen = new Set<string>();
+  pins = pins.filter((p) => {
+    if (seen.has(p.label)) return false;
+    seen.add(p.label);
+    return true;
+  });
+
+  // Static fallback when no real data
+  if (pins.length === 0) {
+    pins = [
+      { label: 'Kandy', x: 52, y: 30, color: 'var(--color-coral)', active: true },
+      { label: 'Galle', x: 38, y: 72, color: 'var(--color-sage)' },
+      { label: 'Ella', x: 64, y: 65, color: 'var(--color-amber)' },
+      { label: 'Colombo', x: 22, y: 55, color: 'var(--color-sage)' },
+    ];
+  }
 
   return (
     <div
@@ -508,32 +704,38 @@ function CSSMiniMap({ large = false }: { large?: boolean }) {
         background: 'linear-gradient(160deg, #e8f0ea 0%, #d4e4d8 40%, #c8d8cc 100%)',
       }}
     >
-      {/* Road lines (decorative) */}
+      {/* Decorative SVG layer */}
       <svg
         className="absolute inset-0 w-full h-full"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
       >
         {/* Connection lines between pins */}
-        <line x1="52" y1="30" x2="38" y2="72" stroke="rgba(107,140,122,.4)" strokeWidth="0.8" strokeDasharray="2,1.5" />
-        <line x1="52" y1="30" x2="64" y2="65" stroke="rgba(196,132,74,.35)" strokeWidth="0.8" strokeDasharray="2,1.5" />
-        <line x1="52" y1="30" x2="22" y2="55" stroke="rgba(107,140,122,.3)" strokeWidth="0.8" strokeDasharray="2,1.5" />
-        {/* Stylised terrain patches */}
+        {pins.length > 1 && pins.slice(1).map((pin, i) => (
+          <line
+            key={`line-${i}`}
+            x1={pins[0].x} y1={pins[0].y}
+            x2={pin.x} y2={pin.y}
+            stroke="rgba(107,140,122,.35)"
+            strokeWidth="0.8"
+            strokeDasharray="2,1.5"
+          />
+        ))}
+        {/* Terrain patches */}
         <ellipse cx="60" cy="20" rx="18" ry="10" fill="rgba(107,140,122,.15)" />
-        <ellipse cx="30" cy="80" rx="15" ry="8" fill="rgba(107,140,122,.1)" />
+        <ellipse cx="30" cy="80" rx="15" ry="8" fill="rgba(107,140,122,.10)" />
         <ellipse cx="75" cy="55" rx="12" ry="9" fill="rgba(107,140,122,.12)" />
         {/* Coastline hint */}
         <path d="M0 90 Q10 75 20 80 Q30 85 35 78 Q40 72 38 72 Q36 80 30 88 Q20 95 10 100 Z" fill="rgba(100,160,200,.15)" />
       </svg>
 
       {/* Pins */}
-      {MAP_PINS.map((pin) => (
+      {pins.map((pin) => (
         <div
           key={pin.label}
           className="absolute flex flex-col items-center"
           style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -100%)' }}
         >
-          {/* Pin dot */}
           <div
             className="rounded-full border-2 border-white shadow-sm"
             style={{
@@ -543,7 +745,6 @@ function CSSMiniMap({ large = false }: { large?: boolean }) {
               boxShadow: pin.active ? `0 0 0 3px ${pin.color}33` : undefined,
             }}
           />
-          {/* Label */}
           <span
             className="text-[8.5px] font-medium whitespace-nowrap mt-0.5 px-1 py-0.5 rounded"
             style={{
@@ -561,7 +762,7 @@ function CSSMiniMap({ large = false }: { large?: boolean }) {
       <div className="absolute bottom-1.5 left-2 flex items-center gap-2">
         <LegendDot color="var(--color-coral)" label="Active" />
         <LegendDot color="var(--color-sage)" label="Visited" />
-        <LegendDot color="var(--color-amber)" label="Surveyed" />
+        <LegendDot color="var(--color-amber)" label="Noted" />
       </div>
     </div>
   );
@@ -572,6 +773,46 @@ function LegendDot({ color, label }: { color: string; label: string }) {
     <div className="flex items-center gap-1">
       <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
       <span className="text-[8px] text-ink-muted font-medium">{label}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EntityTab mini-map sub-component (uses real map data)
+// ---------------------------------------------------------------------------
+
+function EntityTabMiniMap({
+  entityId,
+  entityNotes,
+}: {
+  entityId: string | null;
+  entityNotes?: NoteSummary[];
+}) {
+  const { data: mapLocations = [] } = useMapLocations();
+  const { data: entity } = useEntity(entityId);
+
+  const entityNoteIds = new Set((entityNotes ?? []).map((n) => n.id));
+  const relevantLocations = mapLocations.filter(
+    (l) =>
+      (l.source_type === 'entity' && l.source_id === entityId) ||
+      (l.source_type === 'note' && entityNoteIds.has(l.source_id)),
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest flex items-center gap-1">
+          <span>📍</span> Location
+        </span>
+        <button className="text-[11px] text-ink-muted hover:text-ink cursor-pointer transition-colors">
+          ⤢
+        </button>
+      </div>
+      <CSSMiniMap
+        activeEntityName={entity?.name}
+        activeEntityId={entityId ?? undefined}
+        locations={relevantLocations}
+      />
     </div>
   );
 }

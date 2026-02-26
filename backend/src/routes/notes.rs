@@ -11,6 +11,242 @@ use crate::error::AppError;
 use crate::models::note::*;
 use crate::response::ApiResponse;
 
+// ---------------------------------------------------------------------------
+// Tiptap JSON helpers
+// ---------------------------------------------------------------------------
+
+/// Recursively walks a Tiptap JSON document and collects all nodes of the
+/// given `node_type`, returning their `attrs` objects.
+fn collect_nodes<'a>(
+    value: &'a serde_json::Value,
+    node_type: &str,
+    out: &mut Vec<&'a serde_json::Value>,
+) {
+    if let Some(t) = value.get("type").and_then(|v| v.as_str()) {
+        if t == node_type {
+            if let Some(attrs) = value.get("attrs") {
+                out.push(attrs);
+            }
+            return; // atom node — no children to recurse into
+        }
+    }
+    // Recurse into `content` array
+    if let Some(content) = value.get("content").and_then(|v| v.as_array()) {
+        for child in content {
+            collect_nodes(child, node_type, out);
+        }
+    }
+}
+
+/// Parse an entity UUID from a Tiptap `entity_mention` attrs object.
+/// Returns `None` if the `id` field is missing or not a valid UUID string.
+fn parse_uuid_attr(attrs: &serde_json::Value, key: &str) -> Option<Uuid> {
+    attrs
+        .get(key)
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
+}
+
+/// Extract entity ids → mention counts and concept ids from a Tiptap JSON body.
+/// Returns `(entity_counts, concept_ids)`.
+fn extract_mentions(body: &serde_json::Value) -> (Vec<(Uuid, i32)>, Vec<Uuid>) {
+    // --- entity mentions ---
+    let mut entity_attrs: Vec<&serde_json::Value> = Vec::new();
+    collect_nodes(body, "entityMention", &mut entity_attrs);
+
+    let mut entity_counts: std::collections::HashMap<Uuid, i32> = std::collections::HashMap::new();
+    for attrs in &entity_attrs {
+        if let Some(id) = parse_uuid_attr(attrs, "id") {
+            *entity_counts.entry(id).or_insert(0) += 1;
+        }
+    }
+    let entity_counts: Vec<(Uuid, i32)> = entity_counts.into_iter().collect();
+
+    // --- concept tags ---
+    let mut concept_attrs: Vec<&serde_json::Value> = Vec::new();
+    collect_nodes(body, "conceptTag", &mut concept_attrs);
+
+    let mut concept_ids: Vec<Uuid> = Vec::new();
+    let mut seen_concepts: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    for attrs in &concept_attrs {
+        if let Some(id) = parse_uuid_attr(attrs, "id") {
+            if seen_concepts.insert(id) {
+                concept_ids.push(id);
+            }
+        }
+    }
+
+    (entity_counts, concept_ids)
+}
+
+/// Re-link entities and concepts for a note based on its Tiptap JSON body,
+/// then regenerate graph edges. Runs inside the caller's transaction.
+async fn sync_note_links(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    workspace_id: Uuid,
+    note_id: Uuid,
+    body: &serde_json::Value,
+) -> Result<(), AppError> {
+    let (entity_counts, concept_ids) = extract_mentions(body);
+
+    // ------------------------------------------------------------------
+    // 1. Rebuild note_entities
+    // ------------------------------------------------------------------
+    sqlx::query("DELETE FROM note_entities WHERE note_id = $1")
+        .bind(note_id)
+        .execute(&mut **tx)
+        .await?;
+
+    for (entity_id, count) in &entity_counts {
+        sqlx::query(
+            "INSERT INTO note_entities (note_id, entity_id, mention_count) \
+             VALUES ($1, $2, $3) \
+             ON CONFLICT (note_id, entity_id) DO UPDATE SET mention_count = EXCLUDED.mention_count",
+        )
+        .bind(note_id)
+        .bind(entity_id)
+        .bind(count)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Rebuild note_concepts
+    // ------------------------------------------------------------------
+    sqlx::query("DELETE FROM note_concepts WHERE note_id = $1")
+        .bind(note_id)
+        .execute(&mut **tx)
+        .await?;
+
+    for concept_id in &concept_ids {
+        sqlx::query(
+            "INSERT INTO note_concepts (note_id, concept_id) \
+             VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(note_id)
+        .bind(concept_id)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Regenerate graph edges for this note
+    //    We only touch edges where both endpoints are within this note's
+    //    entity/concept set (entity_co_mention, entity_concept).
+    //    Delete existing edges that involve these node pairs, then reinsert.
+    // ------------------------------------------------------------------
+
+    // Delete old co-mention edges among entities that were linked to this note
+    // and old entity↔concept edges for this workspace derived from this note.
+    // Simplest safe approach: delete edges whose source+target are in the
+    // entity/concept sets touched by this note.
+    let all_entity_ids: Vec<Uuid> = entity_counts.iter().map(|(id, _)| *id).collect();
+    let all_concept_ids: Vec<Uuid> = concept_ids.clone();
+
+    if !all_entity_ids.is_empty() {
+        // Remove stale entity_co_mention edges among these entities
+        sqlx::query(
+            "DELETE FROM graph_edges \
+             WHERE workspace_id = $1 \
+               AND edge_type = 'entity_co_mention' \
+               AND source_id = ANY($2) \
+               AND target_id = ANY($2)",
+        )
+        .bind(workspace_id)
+        .bind(&all_entity_ids)
+        .execute(&mut **tx)
+        .await?;
+
+        // Recompute entity_co_mention edges: for every pair of entities
+        // that share at least one note (in this workspace), upsert an edge
+        // whose strength = number of notes they share.
+        let pairs = sqlx::query_as::<_, (Uuid, Uuid, i64)>(
+            "SELECT ne1.entity_id, ne2.entity_id, COUNT(DISTINCT ne1.note_id) \
+             FROM note_entities ne1 \
+             JOIN note_entities ne2 \
+               ON ne1.note_id = ne2.note_id AND ne1.entity_id < ne2.entity_id \
+             JOIN notes n ON n.id = ne1.note_id \
+             WHERE n.workspace_id = $1 \
+               AND (ne1.entity_id = ANY($2) OR ne2.entity_id = ANY($2)) \
+             GROUP BY ne1.entity_id, ne2.entity_id \
+             HAVING COUNT(DISTINCT ne1.note_id) > 0",
+        )
+        .bind(workspace_id)
+        .bind(&all_entity_ids)
+        .fetch_all(&mut **tx)
+        .await?;
+
+        for (src, tgt, shared) in pairs {
+            let weight = (shared as f32).min(10.0) / 10.0; // normalise 0.0–1.0
+            sqlx::query(
+                "INSERT INTO graph_edges \
+                 (workspace_id, source_type, source_id, target_type, target_id, edge_type, strength) \
+                 VALUES ($1, 'entity', $2, 'entity', $3, 'entity_co_mention', $4) \
+                 ON CONFLICT (workspace_id, source_type, source_id, target_type, target_id, edge_type) \
+                 DO UPDATE SET strength = EXCLUDED.strength, updated_at = now()",
+            )
+            .bind(workspace_id)
+            .bind(src)
+            .bind(tgt)
+            .bind(weight)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    if !all_entity_ids.is_empty() && !all_concept_ids.is_empty() {
+        // Remove stale entity_concept edges
+        sqlx::query(
+            "DELETE FROM graph_edges \
+             WHERE workspace_id = $1 \
+               AND edge_type = 'entity_concept' \
+               AND source_id = ANY($2) \
+               AND target_id = ANY($3)",
+        )
+        .bind(workspace_id)
+        .bind(&all_entity_ids)
+        .bind(&all_concept_ids)
+        .execute(&mut **tx)
+        .await?;
+
+        // Recompute entity_concept edges
+        let ec_pairs = sqlx::query_as::<_, (Uuid, Uuid, i64)>(
+            "SELECT ne.entity_id, nc.concept_id, COUNT(DISTINCT ne.note_id) \
+             FROM note_entities ne \
+             JOIN note_concepts nc ON nc.note_id = ne.note_id \
+             JOIN notes n ON n.id = ne.note_id \
+             WHERE n.workspace_id = $1 \
+               AND ne.entity_id = ANY($2) \
+               AND nc.concept_id = ANY($3) \
+             GROUP BY ne.entity_id, nc.concept_id",
+        )
+        .bind(workspace_id)
+        .bind(&all_entity_ids)
+        .bind(&all_concept_ids)
+        .fetch_all(&mut **tx)
+        .await?;
+
+        for (entity_id, concept_id, count) in ec_pairs {
+            let weight = (count as f32).min(10.0) / 10.0;
+            sqlx::query(
+                "INSERT INTO graph_edges \
+                 (workspace_id, source_type, source_id, target_type, target_id, edge_type, strength) \
+                 VALUES ($1, 'entity', $2, 'concept', $3, 'entity_concept', $4) \
+                 ON CONFLICT (workspace_id, source_type, source_id, target_type, target_id, edge_type) \
+                 DO UPDATE SET strength = EXCLUDED.strength, updated_at = now()",
+            )
+            .bind(workspace_id)
+            .bind(entity_id)
+            .bind(concept_id)
+            .bind(weight)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
 async fn list_notes(
     auth: AuthUser,
     State(pool): State<PgPool>,
@@ -62,30 +298,34 @@ async fn list_notes(
     }
 
     // We'll use a simpler approach: build the full query string
-    // and bind parameters positionally
-    let mut query_str = String::from(
-        "SELECT n.id, n.workspace_id, n.title, n.body_text, n.note_type::text, n.is_starred, \
-         n.location_name, n.gps_coords, n.weather, n.created_at, n.updated_at \
-         FROM notes n",
-    );
-    let mut count_str = String::from("SELECT COUNT(*) FROM notes n");
-    let mut joins = String::new();
+    // and bind parameters positionally.
+    // Tag JOIN is always included for ARRAY_AGG aggregation.
+    let mut filter_joins = String::new();
 
     if filters.field_trip_id.is_some() {
-        joins.push_str(" JOIN note_field_trips nft ON nft.note_id = n.id");
+        filter_joins.push_str(" JOIN note_field_trips nft ON nft.note_id = n.id");
         conditions.push(format!("nft.field_trip_id = ${}", param_idx));
         param_idx += 1;
     }
 
     if filters.concept_id.is_some() {
-        joins.push_str(" JOIN note_concepts nc ON nc.note_id = n.id");
+        filter_joins.push_str(" JOIN note_concepts nc ON nc.note_id = n.id");
         conditions.push(format!("nc.concept_id = ${}", param_idx));
         param_idx += 1;
     }
 
     if filters.entity_id.is_some() {
-        joins.push_str(" JOIN note_entities ne ON ne.note_id = n.id");
-        conditions.push(format!("ne.entity_id = ${}", param_idx));
+        filter_joins.push_str(" JOIN note_entities ne_filt ON ne_filt.note_id = n.id");
+        conditions.push(format!("ne_filt.entity_id = ${}", param_idx));
+        param_idx += 1;
+    }
+
+    if filters.entity_type.is_some() {
+        filter_joins.push_str(
+            " JOIN note_entities ne_et ON ne_et.note_id = n.id \
+             JOIN entities ent_et ON ent_et.id = ne_et.entity_id",
+        );
+        conditions.push(format!("ent_et.entity_type::text = ${}", param_idx));
         param_idx += 1;
     }
 
@@ -108,13 +348,25 @@ async fn list_notes(
         _ => " ORDER BY n.created_at DESC",
     };
 
-    query_str.push_str(&joins);
-    query_str.push_str(&where_clause);
-    query_str.push_str(order);
-    query_str.push_str(&format!(" LIMIT ${} OFFSET ${}", param_idx, param_idx + 1));
+    // Count query does not need tag aggregation
+    let count_str = format!(
+        "SELECT COUNT(DISTINCT n.id) FROM notes n{}{}",
+        filter_joins, where_clause
+    );
 
-    count_str.push_str(&joins);
-    count_str.push_str(&where_clause);
+    // Data query: filter joins first, then LEFT JOIN for tags + GROUP BY for aggregation
+    let query_str = format!(
+        "SELECT n.id, n.workspace_id, n.title, n.body_text, n.note_type::text AS note_type, n.is_starred, \
+         n.location_name, n.gps_coords, n.weather, \
+         COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::TEXT[]) AS tags, \
+         n.created_at, n.updated_at \
+         FROM notes n{} \
+         LEFT JOIN note_tags nt ON nt.note_id = n.id \
+         LEFT JOIN tags t ON t.id = nt.tag_id{} \
+         GROUP BY n.id{} \
+         LIMIT ${} OFFSET ${}",
+        filter_joins, where_clause, order, param_idx, param_idx + 1
+    );
 
     // Build and execute count query
     let mut count_q = sqlx::query_scalar::<_, i64>(&count_str).bind(auth.workspace_id);
@@ -126,6 +378,9 @@ async fn list_notes(
     }
     if let Some(ref e_id) = filters.entity_id {
         count_q = count_q.bind(e_id);
+    }
+    if let Some(ref et) = filters.entity_type {
+        count_q = count_q.bind(et);
     }
     if let Some(ref nt) = filters.note_type {
         count_q = count_q.bind(nt);
@@ -142,6 +397,9 @@ async fn list_notes(
     }
     if let Some(ref e_id) = filters.entity_id {
         data_q = data_q.bind(e_id);
+    }
+    if let Some(ref et) = filters.entity_type {
+        data_q = data_q.bind(et);
     }
     if let Some(ref nt) = filters.note_type {
         data_q = data_q.bind(nt);
@@ -275,6 +533,12 @@ async fn create_note(
         }
     }
 
+    // --- Auto-extract entities/concepts from Tiptap body and regenerate graph edges ---
+    // Only parse if the body is a non-trivial object (not the default empty `{}`)
+    if body.body.is_object() && !body.body.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        sync_note_links(&mut tx, auth.workspace_id, note.id, &body.body).await?;
+    }
+
     tx.commit()
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -395,6 +659,11 @@ async fn update_note(
                 .execute(&mut *tx)
                 .await?;
         }
+    }
+
+    // --- Auto-extract entities/concepts from Tiptap body and regenerate graph edges ---
+    if let Some(ref tiptap_body) = body.body {
+        sync_note_links(&mut tx, auth.workspace_id, id, tiptap_body).await?;
     }
 
     tx.commit()

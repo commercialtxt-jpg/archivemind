@@ -41,7 +41,7 @@ export default function EntitiesView() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-cream">
+    <div className="h-full overflow-y-auto bg-cream view-enter">
       <div className="max-w-[960px] mx-auto px-8 py-8">
         {/* Header */}
         <div className="mb-6">
@@ -82,8 +82,21 @@ export default function EntitiesView() {
         </div>
 
         {entities.length === 0 && (
-          <div className="text-center py-16 text-ink-muted text-sm">
-            No entities found.
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center text-2xl"
+              style={{ background: 'rgba(196,132,74,0.10)', border: '1px solid rgba(196,132,74,0.2)' }}
+            >
+              👤
+            </div>
+            <div className="text-center max-w-[320px]">
+              <p className="font-serif text-[16px] font-semibold text-ink mb-1.5">
+                {activeTab === 'all' ? 'No entities yet' : `No ${activeTab}s yet`}
+              </p>
+              <p className="text-[12.5px] text-ink-muted leading-relaxed">
+                Entities appear here when you mention people, locations, or artifacts in your field notes using the @ mention syntax.
+              </p>
+            </div>
           </div>
         )}
       </div>

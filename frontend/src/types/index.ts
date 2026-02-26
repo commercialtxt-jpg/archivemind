@@ -153,17 +153,26 @@ export interface InventoryItem {
   workspace_id: string;
   name: string;
   icon: string;
+  category: string | null;
+  notes: string | null;
   status: string;
   sort_order: number;
   created_at: string;
   updated_at: string;
 }
 
+export interface ChecklistItem {
+  label: string;
+  done: boolean;
+}
+
 export interface Routine {
   id: string;
   workspace_id: string;
+  field_trip_id: string | null;
   name: string;
-  checklist: Array<{ label?: string; done?: boolean }>;
+  icon: string;
+  checklist: ChecklistItem[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -172,7 +181,10 @@ export interface Routine {
 export interface GraphNode {
   id: string;
   label: string;
-  node_type: 'person' | 'location' | 'artifact' | 'concept';
+  /** Top-level category: "entity" | "concept" | "location" */
+  node_type: string;
+  /** For entity nodes: "person" | "artifact" | "location". Empty for concepts. */
+  entity_type: string;
   note_count: number;
 }
 
@@ -192,3 +204,17 @@ export interface GraphData {
 }
 
 export type View = 'journal' | 'graph' | 'map' | 'entities' | 'inventory' | 'routines';
+
+export interface MapLocation {
+  id: string;
+  name: string;
+  /** "note" or "entity" */
+  source_type: 'note' | 'entity';
+  source_id: string;
+  lat: number;
+  lng: number;
+  /** Set for note sources; null for entity sources */
+  note_type: NoteType | null;
+  note_count: number;
+  location_name: string | null;
+}

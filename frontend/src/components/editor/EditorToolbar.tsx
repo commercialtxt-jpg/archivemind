@@ -1,21 +1,39 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useOfflineStore } from '../../stores/offlineStore';
+import { useUIStore } from '../../stores/uiStore';
+import { useUploadMedia } from '../../hooks/useMedia';
 
 interface EditorToolbarProps {
   editor: Editor | null;
   activeTab: 'notes' | 'map' | 'graph';
   onTabChange: (tab: 'notes' | 'map' | 'graph') => void;
   note?: { id: string; title: string; body_text: string } | null;
+  /** Called when voice recording starts (so editor can show recording UI) */
+  onRecordingStart?: () => void;
+  /** Called with the recorded blob when recording stops */
+  onRecordingStop?: (blob: Blob) => void;
 }
 
-export default function EditorToolbar({ editor, activeTab, onTabChange, note }: EditorToolbarProps) {
+export default function EditorToolbar({
+  editor,
+  activeTab,
+  onTabChange,
+  note,
+  onRecordingStart,
+  onRecordingStop,
+}: EditorToolbarProps) {
   const { isOffline, setOffline } = useOfflineStore();
+  const { entityPanelOpen, toggleEntityPanel } = useUIStore();
   const [toast, setToast] = useState<string | null>(null);
+  const uploadMedia = useUploadMedia();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 2000);
+    setTimeout(() => setToast(null), 2500);
   };
 
   const handleExport = () => {
@@ -30,8 +48,121 @@ export default function EditorToolbar({ editor, activeTab, onTabChange, note }: 
     URL.revokeObjectURL(url);
   };
 
+  // ------------------------------------------------------------------
+  // Photo upload
+  // ------------------------------------------------------------------
+  const handlePhotoClick = () => {
+    if (!note) {
+      showToast('Select a note first');
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    // Reset so the same file can be re-selected later
+    e.target.value = '';
+    if (!files.length || !note) return;
+
+    // Validate size (max 10 MB per photo)
+    const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+    const invalid = files.filter((f) => f.size > MAX_PHOTO_BYTES);
+    if (invalid.length) {
+      showToast(`File too large (max 10 MB): ${invalid.map((f) => f.name).join(', ')}`);
+      return;
+    }
+
+    showToast(`Uploading ${files.length} photo${files.length > 1 ? 's' : ''}...`);
+
+    for (const file of files) {
+      try {
+        await uploadMedia.mutateAsync({ file, noteId: note.id, mediaType: 'photo' });
+      } catch {
+        showToast(`Upload failed: ${file.name}`);
+      }
+    }
+    showToast('Photos uploaded');
+  };
+
+  // ------------------------------------------------------------------
+  // Voice recording
+  // ------------------------------------------------------------------
+  const handleVoiceClick = async () => {
+    if (!note) {
+      showToast('Select a note first');
+      return;
+    }
+
+    if (isRecording) {
+      // Stop recording
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    // Start recording
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+      const chunks: BlobPart[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const audioBlob = new Blob(chunks, { type: mimeType });
+
+        // Notify parent (for UI indicator)
+        onRecordingStop?.(audioBlob);
+
+        // Upload
+        const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
+        if (audioBlob.size > MAX_AUDIO_BYTES) {
+          showToast('Recording too large (max 50 MB)');
+          return;
+        }
+
+        const filename = `recording-${Date.now()}.${ext}`;
+        const file = new File([audioBlob], filename, { type: mimeType });
+
+        showToast('Uploading recording...');
+        try {
+          await uploadMedia.mutateAsync({ file, noteId: note!.id, mediaType: 'audio' });
+          showToast('Recording saved');
+        } catch {
+          showToast('Upload failed — recording lost');
+        }
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      onRecordingStart?.();
+    } catch (err) {
+      showToast('Microphone access denied');
+      console.error(err);
+    }
+  };
+
   return (
     <div className="relative bg-warm-white border-b border-border-light">
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={handleFilesSelected}
+        aria-label="Upload photos"
+      />
+
       {/* Row 1: View tabs + actions */}
       <div className="flex items-center justify-between px-4 py-2">
         {/* View tabs */}
@@ -46,7 +177,9 @@ export default function EditorToolbar({ editor, activeTab, onTabChange, note }: 
           <ToolbarIconBtn icon="📡" title="Offline mode" active={isOffline} onClick={() => setOffline(!isOffline)} />
           <ToolbarIconBtn icon="🕸" title="Knowledge Graph" active />
           <ToolbarIconBtn icon="⬆" title="Export as Markdown" onClick={handleExport} />
-          <ToolbarIconBtn icon="⚙" title="Settings" onClick={() => showToast('Settings coming soon')} />
+          {!entityPanelOpen && (
+            <ToolbarIconBtn icon="↙" title="Open context panel" active onClick={toggleEntityPanel} />
+          )}
         </div>
       </div>
 
@@ -100,8 +233,21 @@ export default function EditorToolbar({ editor, activeTab, onTabChange, note }: 
 
           {/* Insert */}
           <FormatBtn label="[[]]" title="Insert entity mention" onClick={() => editor.chain().focus().insertContent('@').run()} />
-          <FormatBtn label="🔊" title="Insert voice" onClick={() => showToast('Voice recording coming soon')} />
-          <FormatBtn label="📸" title="Insert photo" onClick={() => showToast('Photo upload coming soon')} />
+          <FormatBtn
+            label={isRecording ? '⏹' : '🔊'}
+            title={isRecording ? 'Stop recording' : 'Start voice recording'}
+            active={isRecording}
+            onClick={handleVoiceClick}
+          />
+          <FormatBtn label="📸" title="Upload photo" onClick={handlePhotoClick} />
+        </div>
+      )}
+
+      {/* Recording indicator */}
+      {isRecording && (
+        <div className="flex items-center gap-2 px-4 py-1.5 bg-coral/5 border-t border-coral/20">
+          <span className="w-2 h-2 rounded-full bg-coral animate-pulse" aria-hidden="true" />
+          <span className="text-[11px] text-coral font-medium">Recording — click ⏹ to stop</span>
         </div>
       )}
 
@@ -115,6 +261,20 @@ export default function EditorToolbar({ editor, activeTab, onTabChange, note }: 
   );
 }
 
+// ---------------------------------------------------------------------------
+// Helper: pick the best supported audio MIME type
+// ---------------------------------------------------------------------------
+function getSupportedMimeType(): string {
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 function ViewTab({
   label,
   icon,

@@ -8,6 +8,8 @@ pub struct InventoryItem {
     pub workspace_id: Uuid,
     pub name: String,
     pub icon: String,
+    pub category: String,
+    pub notes: Option<String>,
     pub status: String,
     pub sort_order: i32,
     pub created_at: DateTime<Utc>,
@@ -18,6 +20,8 @@ pub struct InventoryItem {
 pub struct CreateInventoryItem {
     pub name: String,
     pub icon: Option<String>,
+    pub category: Option<String>,
+    pub notes: Option<String>,
     pub status: Option<String>,
     pub sort_order: Option<i32>,
 }
@@ -26,6 +30,8 @@ pub struct CreateInventoryItem {
 pub struct UpdateInventoryItem {
     pub name: Option<String>,
     pub icon: Option<String>,
+    pub category: Option<String>,
+    pub notes: Option<String>,
     pub status: Option<String>,
     pub sort_order: Option<i32>,
 }

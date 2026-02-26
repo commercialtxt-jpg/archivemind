@@ -6,9 +6,13 @@ export function useGraph(filter?: string) {
   return useQuery({
     queryKey: ['graph', filter],
     queryFn: async () => {
-      const params = filter ? `?filter=${filter}` : '';
-      const { data } = await api.get<ApiResponse<GraphData>>(`/graph${params}`);
-      return data.data ?? { nodes: [], edges: [] };
+      try {
+        const params = filter ? `?filter=${filter}` : '';
+        const { data } = await api.get<ApiResponse<GraphData>>(`/graph${params}`);
+        return data.data ?? { nodes: [], edges: [] };
+      } catch {
+        return { nodes: [], edges: [] } as GraphData;
+      }
     },
   });
 }

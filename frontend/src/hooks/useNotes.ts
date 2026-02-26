@@ -1,11 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { ApiResponse, Note, NoteSummary, NoteCount } from '../types';
-import {
-  getMockNotes,
-  getMockNote,
-  getMockNoteCounts,
-} from '../lib/mockData';
 import { cacheNotes, getCachedNotes } from '../lib/offlineDb';
 
 interface NoteFilters {
@@ -13,6 +8,7 @@ interface NoteFilters {
   field_trip_id?: string;
   concept_id?: string;
   entity_id?: string;
+  entity_type?: string;
   starred?: boolean;
   deleted?: boolean;
   sort?: string;
@@ -20,6 +16,11 @@ interface NoteFilters {
   page?: number;
   per_page?: number;
 }
+
+const emptyList: ApiResponse<NoteSummary[]> = {
+  data: [],
+  meta: { total: 0, page: 1, per_page: 50 },
+};
 
 export function useNotes(filters: NoteFilters = {}) {
   return useQuery({
@@ -37,12 +38,12 @@ export function useNotes(filters: NoteFilters = {}) {
         }
         return data;
       } catch {
-        // Try IndexedDB first before falling back to static mock data
+        // Try IndexedDB before returning empty
         const cached = await getCachedNotes();
         if (cached.length > 0) {
           return { data: cached, meta: { total: cached.length } } as ApiResponse<NoteSummary[]>;
         }
-        return getMockNotes();
+        return emptyList;
       }
     },
   });
@@ -54,9 +55,9 @@ export function useNoteCounts() {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<NoteCount>>('/notes?count_only=true');
-        return data.data ?? getMockNoteCounts();
+        return data.data ?? { total: 0, starred: 0, deleted: 0 };
       } catch {
-        return getMockNoteCounts();
+        return { total: 0, starred: 0, deleted: 0 } as NoteCount;
       }
     },
   });
@@ -70,7 +71,7 @@ export function useNote(id: string | null) {
         const { data } = await api.get<ApiResponse<Note>>(`/notes/${id}`);
         return data.data;
       } catch {
-        return getMockNote(id!) ?? null;
+        return null;
       }
     },
     enabled: !!id,
@@ -84,7 +85,7 @@ function getNoteListKeys(queryClient: ReturnType<typeof useQueryClient>) {
   return queryClient
     .getQueriesData<ApiResponse<NoteSummary[]>>({ queryKey: ['notes'] })
     .filter(([key]) => {
-      // Exclude single-note keys like ['notes', 'mock-note-1'] and counts
+      // Exclude single-note keys like ['notes', 'some-id'] and counts
       const second = key[1];
       return second !== null && typeof second === 'object' && !Array.isArray(second);
     })

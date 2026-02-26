@@ -4,6 +4,7 @@ pub mod field_trips;
 pub mod graph;
 pub mod health;
 pub mod inventory;
+pub mod map;
 pub mod media;
 pub mod notes;
 pub mod routines;
@@ -30,6 +31,7 @@ pub fn build_router(pool: PgPool, config: Config) -> Router {
         .merge(inventory::routes())
         .merge(routines::routes())
         .merge(graph::routes())
+        .merge(map::routes())
         .with_state(pool)
         .layer(axum::Extension(config))
 }

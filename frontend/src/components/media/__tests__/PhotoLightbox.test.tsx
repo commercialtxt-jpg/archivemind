@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PhotoLightbox from '../PhotoLightbox';
 import type { Media } from '../../../types';
 
@@ -33,13 +34,21 @@ const photos: Media[] = [
   makePhoto({ id: 'p3', label: 'Ritual ceremony', original_filename: 'ritual.jpg' }),
 ];
 
+/** Wrap with a fresh QueryClient so TanStack Query hooks work in tests. */
+function renderWithQuery(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('PhotoLightbox', () => {
   it('renders the current photo label', () => {
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -52,7 +61,7 @@ describe('PhotoLightbox', () => {
   });
 
   it('shows the correct photo counter', () => {
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -67,7 +76,7 @@ describe('PhotoLightbox', () => {
   it('calls onClose when the close button is clicked', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -83,7 +92,7 @@ describe('PhotoLightbox', () => {
   it('calls onClose when Escape key is pressed', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -99,7 +108,7 @@ describe('PhotoLightbox', () => {
   it('calls onIndexChange with next index on ArrowRight', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -115,7 +124,7 @@ describe('PhotoLightbox', () => {
   it('calls onIndexChange with prev index on ArrowLeft', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={1}
@@ -131,7 +140,7 @@ describe('PhotoLightbox', () => {
   it('does not call onIndexChange on ArrowRight when on last photo', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={2}
@@ -147,7 +156,7 @@ describe('PhotoLightbox', () => {
   it('next button navigates forward', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -163,7 +172,7 @@ describe('PhotoLightbox', () => {
   it('prev button navigates backward', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={1}
@@ -177,7 +186,7 @@ describe('PhotoLightbox', () => {
   });
 
   it('prev button is disabled on first photo', () => {
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -191,7 +200,7 @@ describe('PhotoLightbox', () => {
   });
 
   it('next button is disabled on last photo', () => {
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={2}
@@ -205,7 +214,7 @@ describe('PhotoLightbox', () => {
   });
 
   it('renders thumbnail strip when there are multiple photos', () => {
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -222,7 +231,7 @@ describe('PhotoLightbox', () => {
   it('clicking a thumbnail calls onIndexChange with that index', async () => {
     const user = userEvent.setup();
     const onIndexChange = vi.fn();
-    render(
+    renderWithQuery(
       <PhotoLightbox
         photos={photos}
         initialIndex={0}
@@ -233,5 +242,38 @@ describe('PhotoLightbox', () => {
     );
     await user.click(screen.getByLabelText('View photo 3'));
     expect(onIndexChange).toHaveBeenCalledWith(2);
+  });
+
+  it('shows delete confirmation when trash button is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithQuery(
+      <PhotoLightbox
+        photos={photos}
+        initialIndex={0}
+        currentIndex={0}
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    await user.click(screen.getByLabelText('Delete photo'));
+    expect(screen.getByText('Delete?')).toBeInTheDocument();
+    expect(screen.getByText('Yes, delete')).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+  });
+
+  it('hides delete confirmation when Cancel is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithQuery(
+      <PhotoLightbox
+        photos={photos}
+        initialIndex={0}
+        currentIndex={0}
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    await user.click(screen.getByLabelText('Delete photo'));
+    await user.click(screen.getByText('Cancel'));
+    expect(screen.queryByText('Delete?')).not.toBeInTheDocument();
   });
 });

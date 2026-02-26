@@ -5,6 +5,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { EntityMention, ConceptTag, LocationTag } from '../../lib/tiptap';
 import { useNote, useUpdateNote, useToggleStar } from '../../hooks/useNotes';
+import { useMedia } from '../../hooks/useMedia';
 import { useEditorStore } from '../../stores/editorStore';
 import { useRoutines } from '../../hooks/useRoutines';
 import EditorToolbar from '../editor/EditorToolbar';
@@ -12,7 +13,6 @@ import NoteMetaBar from './NoteMetaBar';
 import AudioPlayer from '../media/AudioPlayer';
 import PhotoStrip from '../media/PhotoStrip';
 import OfflineBar from '../ui/OfflineBar';
-import { MOCK_AUDIO } from '../../lib/mockData';
 
 export default function NoteEditor() {
   const { activeNoteId, setDirty } = useEditorStore();
@@ -22,10 +22,25 @@ export default function NoteEditor() {
   const { data: routinesRes } = useRoutines();
   const [title, setTitle] = useState('');
   const [activeTab, setActiveTab] = useState<'notes' | 'map' | 'graph'>('notes');
+  const [isRecording, setIsRecording] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const activeRoutine = routinesRes?.data?.find((r) => r.is_active);
+
+  // Fetch media counts so we can auto-show players when media exists
+  const { data: audioMedia } = useMedia(activeNoteId, 'audio');
+  const { data: photoMedia } = useMedia(activeNoteId, 'photo');
+
+  const hasAudio =
+    isRecording ||
+    (audioMedia && audioMedia.length > 0) ||
+    note?.note_type === 'interview' ||
+    note?.note_type === 'voice_memo';
+
+  const hasPhotos =
+    (photoMedia && photoMedia.length > 0) ||
+    note?.note_type === 'photo';
 
   const extensions = useMemo(() => [
     StarterKit.configure({
@@ -62,7 +77,8 @@ export default function NoteEditor() {
     },
   });
 
-  // Sync note data into editor when note changes
+  // Sync note data into editor when note changes.
+  // Syncing server state into local controlled state via useEffect is the correct pattern here.
   useEffect(() => {
     if (note) {
       setTitle(note.title);
@@ -74,7 +90,8 @@ export default function NoteEditor() {
         }
       }
     }
-  }, [note, editor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.id]); // Only re-run when note ID changes
 
   // Auto-resize title textarea
   useEffect(() => {
@@ -132,7 +149,14 @@ export default function NoteEditor() {
 
   return (
     <div className="flex flex-col h-full">
-      <EditorToolbar editor={editor} activeTab={activeTab} onTabChange={setActiveTab} note={note ?? null} />
+      <EditorToolbar
+        editor={editor}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        note={note ?? null}
+        onRecordingStart={() => setIsRecording(true)}
+        onRecordingStop={() => setIsRecording(false)}
+      />
       <OfflineBar />
 
       <div className="flex-1 overflow-y-auto">
@@ -180,21 +204,17 @@ export default function NoteEditor() {
             </div>
           )}
 
-          {/* Audio player — shown for interview/voice_memo notes or when mock audio exists */}
-          {note && (note.note_type === 'interview' || note.note_type === 'voice_memo') && (
+          {/* Audio player — shown when note has audio media OR is an interview/voice_memo type */}
+          {activeNoteId && hasAudio && (
             <div className="mt-4">
-              <AudioPlayer
-                noteId={note.id}
-                duration={note.id === 'mock-note-1' ? MOCK_AUDIO.duration_seconds ?? undefined : undefined}
-                transcriptionStatus={note.id === 'mock-note-1' ? MOCK_AUDIO.transcription_status : undefined}
-              />
+              <AudioPlayer noteId={activeNoteId} />
             </div>
           )}
 
-          {/* Photo strip — shown for interview notes with photos or photo notes */}
-          {note && (note.note_type === 'photo' || note.id === 'mock-note-1') && (
+          {/* Photo strip — shown when note has photo media OR is a photo type */}
+          {activeNoteId && hasPhotos && (
             <div className="mt-4">
-              <PhotoStrip noteId={note.id} />
+              <PhotoStrip noteId={activeNoteId} />
             </div>
           )}
 
@@ -217,9 +237,7 @@ export default function NoteEditor() {
                 Graph Note
               </div>
               <p className="text-[11.5px] text-ink-muted">
-                {note.id === 'mock-note-1'
-                  ? '3 new cross-links detected — Priya Ratnam connects to Galle Coastal Plant Survey via Traditional Medicine.'
-                  : 'This note connects to entities and concepts in your knowledge graph.'}
+                This note connects to entities and concepts in your knowledge graph.
               </p>
             </div>
           )}

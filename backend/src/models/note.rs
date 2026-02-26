@@ -35,6 +35,7 @@ pub struct NoteSummary {
     pub location_name: Option<String>,
     pub gps_coords: Option<String>,
     pub weather: Option<String>,
+    pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -96,6 +97,8 @@ pub struct NoteFilters {
     pub field_trip_id: Option<Uuid>,
     pub concept_id: Option<Uuid>,
     pub entity_id: Option<Uuid>,
+    /// Filter notes that mention any entity of the given type (person/location/artifact)
+    pub entity_type: Option<String>,
     pub starred: Option<bool>,
     pub deleted: Option<bool>,
     pub sort: Option<String>,

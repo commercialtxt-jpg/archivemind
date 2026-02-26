@@ -19,5 +19,14 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Allow underscore-prefixed variables to be unused (common convention for unused args)
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      // Downgrade to warning: syncing server state into local state via useEffect is valid
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
 ])

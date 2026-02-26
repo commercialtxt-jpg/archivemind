@@ -1,5 +1,18 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import type { Media } from '../../types';
+import { mediaFileUrl, useDeleteMedia } from '../../hooks/useMedia';
+
+/**
+ * Returns a URL for the photo. Uses the backend file-serve endpoint.
+ * Falls back to a picsum placeholder only when s3_key is empty (legacy data).
+ */
+function resolvePhotoUrl(photo: Media): string {
+  return mediaFileUrl(photo.id);
+}
+
+function resolveThumbUrl(photo: Media): string {
+  return mediaFileUrl(photo.id);
+}
 
 interface PhotoLightboxProps {
   photos: Media[];
@@ -7,6 +20,7 @@ interface PhotoLightboxProps {
   currentIndex: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
+  onDelete?: (id: string) => void;
   placeholderColors?: string[];
 }
 
@@ -24,11 +38,14 @@ export default function PhotoLightbox({
   currentIndex,
   onIndexChange,
   onClose,
+  onDelete,
   placeholderColors = DEFAULT_PLACEHOLDER_COLORS,
 }: PhotoLightboxProps) {
   const photo = photos[currentIndex];
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < photos.length - 1;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteMedia = useDeleteMedia();
 
   const goNext = useCallback(() => {
     if (hasNext) onIndexChange(currentIndex + 1);
@@ -41,13 +58,15 @@ export default function PhotoLightbox({
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'Escape') {
+        if (confirmDelete) setConfirmDelete(false);
+        else onClose();
+      } else if (e.key === 'ArrowRight') goNext();
       else if (e.key === 'ArrowLeft') goPrev();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose, goNext, goPrev]);
+  }, [onClose, goNext, goPrev, confirmDelete]);
 
   // Prevent body scroll while open
   useEffect(() => {
@@ -56,6 +75,27 @@ export default function PhotoLightbox({
       document.body.style.overflow = '';
     };
   }, []);
+
+  const handleDelete = async () => {
+    if (!photo) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    try {
+      await deleteMedia.mutateAsync(photo.id);
+      onDelete?.(photo.id);
+      // Navigate away from deleted item
+      if (photos.length <= 1) {
+        onClose();
+      } else if (currentIndex >= photos.length - 1) {
+        onIndexChange(currentIndex - 1);
+      }
+    } catch {
+      // Error is handled silently — query invalidation will refresh the list
+    }
+    setConfirmDelete(false);
+  };
 
   if (!photo) return null;
 
@@ -69,7 +109,10 @@ export default function PhotoLightbox({
       style={{ background: 'rgba(42,36,32,0.92)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => {
         // Close when clicking the backdrop (not the photo itself)
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          if (confirmDelete) setConfirmDelete(false);
+          else onClose();
+        }
       }}
       role="dialog"
       aria-modal="true"
@@ -89,6 +132,39 @@ export default function PhotoLightbox({
       {/* Counter */}
       <div className="absolute top-5 left-1/2 -translate-x-1/2 text-white/60 font-mono text-[12px]">
         {currentIndex + 1} / {photos.length}
+      </div>
+
+      {/* Delete button — top-left area */}
+      <div className="absolute top-5 left-5 flex items-center gap-2">
+        {confirmDelete ? (
+          <>
+            <span className="text-white/70 text-[12px]">Delete?</span>
+            <button
+              onClick={handleDelete}
+              disabled={deleteMedia.isPending}
+              className="px-2 py-1 rounded bg-coral text-white text-[11px] font-medium hover:bg-coral/80 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {deleteMedia.isPending ? 'Deleting...' : 'Yes, delete'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-2 py-1 rounded bg-white/10 text-white/70 text-[11px] hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={handleDelete}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-coral/20 text-white/60 hover:text-coral transition-colors cursor-pointer"
+            aria-label="Delete photo"
+            title="Delete photo"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M3 4h10M6 4V2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V4M5 4l.5 9M11 4l-.5 9M8 4v9" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Prev arrow */}
@@ -128,25 +204,15 @@ export default function PhotoLightbox({
             background: placeholderColor,
           }}
         >
-          {photo.s3_key ? (
-            <img
-              src={photo.s3_key}
-              alt={photo.label || photo.original_filename || 'Photo'}
-              className="object-contain max-w-full max-h-[70vh] rounded-xl"
-              style={{ display: 'block' }}
-            />
-          ) : (
-            /* Placeholder when no real image URL */
-            <div
-              className="flex items-center justify-center text-white/40 text-sm"
-              style={{ width: 480, height: 320 }}
-            >
-              {photo.original_filename || 'Photo'}
-            </div>
-          )}
+          <img
+            src={resolvePhotoUrl(photo)}
+            alt={photo.label || photo.original_filename || 'Photo'}
+            className="object-contain max-w-full max-h-[70vh] rounded-xl"
+            style={{ display: 'block' }}
+          />
         </div>
 
-        {/* Label */}
+        {/* Caption */}
         {(photo.label || photo.original_filename) && (
           <p className="text-white/70 text-sm text-center max-w-md">
             {photo.label || photo.original_filename}
@@ -170,18 +236,13 @@ export default function PhotoLightbox({
                   }`}
                   aria-label={`View photo ${idx + 1}`}
                 >
-                  {p.s3_key ? (
-                    <img
-                      src={p.s3_key}
-                      alt={p.label || ''}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full"
-                      style={{ background: thumbColor }}
-                    />
-                  )}
+                  <img
+                    src={resolveThumbUrl(p)}
+                    alt={p.label || ''}
+                    className="w-full h-full object-cover"
+                    style={{ background: thumbColor }}
+                    loading="lazy"
+                  />
                 </button>
               );
             })}

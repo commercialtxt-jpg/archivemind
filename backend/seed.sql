@@ -26,7 +26,7 @@ INSERT INTO users (id, email, password_hash, display_name, avatar_initials)
 VALUES (
   'a0000000-0000-0000-0000-000000000001',
   'researcher@archivemind.dev',
-  '$argon2id$v=19$m=19456,t=2,p=1$dGVzdHNhbHQxMjM0NTY3OA$YfHdEzW8RW4jPt0XpxjY/RNLDkGJcOXCpZGvRFkVqEk',
+  '$argon2id$v=19$m=19456,t=2,p=1$dGVzdHNhbHQxMjM0NTY3OA$q8grxznyox9ZpbGCtPAL359KPs8SKb8ry4z8P7Vtcyo',
   'AK',
   'AK'
 ) ON CONFLICT (email) DO NOTHING;

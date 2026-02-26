@@ -5,6 +5,28 @@ import { useNotes, useCreateNote, usePermanentDeleteNote } from '../../hooks/use
 import { useSearch } from '../../hooks/useSearch';
 import NoteCard from './NoteCard';
 
+/** Skeleton shimmer placeholder while notes are loading */
+function NoteListSkeleton() {
+  return (
+    <div className="p-2 space-y-2" aria-busy="true" aria-label="Loading notes">
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="p-3 rounded-[10px] border border-transparent"
+          style={{ opacity: 1 - i * 0.15 }}
+        >
+          <div className="flex gap-2 mb-2">
+            <div className="h-3 rounded-full flex-1 animate-pulse" style={{ background: 'var(--color-sand)' }} />
+            <div className="h-3 w-12 rounded-full animate-pulse" style={{ background: 'var(--color-border)' }} />
+          </div>
+          <div className="h-2.5 rounded-full w-4/5 mb-1.5 animate-pulse" style={{ background: 'var(--color-border-light)' }} />
+          <div className="h-2.5 rounded-full w-3/5 animate-pulse" style={{ background: 'var(--color-border-light)' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function NoteList() {
   const { sidebarFilter, searchQuery } = useUIStore();
   const { activeNoteId, setActiveNoteId } = useEditorStore();
@@ -43,7 +65,7 @@ export default function NoteList() {
         if (sidebarFilter.id) f.concept_id = sidebarFilter.id;
         break;
       case 'entity_type':
-        if (sidebarFilter.id) f.entity_id = sidebarFilter.id;
+        if (sidebarFilter.id) f.entity_type = sidebarFilter.id;
         break;
       case 'note_type':
         if (sidebarFilter.id) f.note_type = sidebarFilter.id;
@@ -184,20 +206,25 @@ export default function NoteList() {
       {/* Note list */}
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
-          <div className="p-4 text-center text-[12px] text-ink-muted">Loading...</div>
+          <NoteListSkeleton />
         ) : notes.length === 0 ? (
           <div className="p-4 text-center text-[12px] text-ink-muted">
             {isSearching ? 'No results found' : sidebarFilter.type === 'trash' ? 'Trash is empty' : 'No notes yet'}
           </div>
         ) : (
-          notes.map((note) => (
-            <NoteCard
+          notes.map((note, index) => (
+            <div
               key={note.id}
-              note={note}
-              isActive={note.id === activeNoteId}
-              onClick={() => setActiveNoteId(note.id)}
-              isTrashView={isTrashView}
-            />
+              className="animate-note-enter"
+              style={{ animationDelay: `${Math.min(index * 30, 200)}ms` }}
+            >
+              <NoteCard
+                note={note}
+                isActive={note.id === activeNoteId}
+                onClick={() => setActiveNoteId(note.id)}
+                isTrashView={isTrashView}
+              />
+            </div>
           ))
         )}
       </div>

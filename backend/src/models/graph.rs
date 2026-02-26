@@ -22,7 +22,11 @@ pub struct GraphEdge {
 pub struct GraphNode {
     pub id: Uuid,
     pub label: String,
+    /// "entity" | "concept" | "location" — top-level category for the graph renderer
     pub node_type: String,
+    /// For entity nodes: "person" | "artifact" | "location". Empty string for concepts.
+    pub entity_type: String,
+    /// Number of notes that reference this node (used to scale node size)
     pub note_count: i64,
 }
 

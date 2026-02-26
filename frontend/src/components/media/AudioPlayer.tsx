@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
+import { useMedia, mediaFileUrl } from '../../hooks/useMedia';
 
 interface AudioPlayerProps {
+  /** Note ID — used to fetch audio media records */
   noteId: string;
+  /** Optional single src override (bypasses API fetch) */
   src?: string;
+  /** Optional duration override when src is provided directly */
   duration?: number;
   transcriptionStatus?: string;
 }
@@ -14,12 +18,21 @@ function formatTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function AudioPlayer({ src, duration, transcriptionStatus }: AudioPlayerProps) {
+export default function AudioPlayer({ noteId, src: srcProp, duration, transcriptionStatus }: AudioPlayerProps) {
+  // Fetch audio media for this note unless a direct src is provided
+  const { data: audioMedia } = useMedia(srcProp ? null : noteId, 'audio');
+
+  // Pick the first audio item's file URL, or use the direct src prop
+  const resolvedSrc = srcProp ?? (audioMedia?.[0] ? mediaFileUrl(audioMedia[0].id) : undefined);
+  const resolvedDuration = duration ?? audioMedia?.[0]?.duration_seconds ?? undefined;
+  const resolvedTranscription =
+    transcriptionStatus ?? audioMedia?.[0]?.transcription_status ?? undefined;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(duration ?? 0);
+  const [totalDuration, setTotalDuration] = useState(resolvedDuration ?? 0);
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
@@ -74,18 +87,18 @@ export default function AudioPlayer({ src, duration, transcriptionStatus }: Audi
 
     wavesurferRef.current = ws;
 
-    if (src) {
-      ws.load(src).catch(() => {
+    if (resolvedSrc) {
+      ws.load(resolvedSrc).catch(() => {
         setLoadError(true);
       });
     } else {
-      // No src — render an empty/mock waveform using fake peaks
+      // No src — render an empty/placeholder waveform using fake peaks
       const fakePeaks = Array.from({ length: 100 }, (_, i) =>
         Math.max(0.05, Math.abs(Math.sin(i * 0.4) * 0.7 + Math.cos(i * 0.9) * 0.3))
       );
-      ws.load('', [fakePeaks], duration ?? 180);
+      ws.load('', [fakePeaks], resolvedDuration ?? 180);
     }
-  }, [src, duration]);
+  }, [resolvedSrc, resolvedDuration]);
 
   useEffect(() => {
     initWaveSurfer();
@@ -94,13 +107,23 @@ export default function AudioPlayer({ src, duration, transcriptionStatus }: Audi
       wavesurferRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+  }, [resolvedSrc]);
 
   const togglePlay = () => {
     const ws = wavesurferRef.current;
     if (!ws || !isReady) return;
     ws.playPause();
   };
+
+  // Show empty state when there is nothing to play yet
+  if (!resolvedSrc && !audioMedia?.length) {
+    return (
+      <div className="flex items-center justify-center gap-2 h-[60px] bg-parchment border border-border-light rounded-xl text-ink-ghost text-sm">
+        <span>🔊</span>
+        <span>No recordings yet — click 🔊 to record</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3 bg-parchment border border-border rounded-xl px-4 py-3">
@@ -138,7 +161,7 @@ export default function AudioPlayer({ src, duration, transcriptionStatus }: Audi
           </div>
         )}
         {/* Loading shimmer while not ready and no error */}
-        {!isReady && !loadError && src && (
+        {!isReady && !loadError && resolvedSrc && (
           <div className="absolute inset-0 flex items-end gap-[2px]">
             {Array.from({ length: 48 }, (_, i) => (
               <div
@@ -157,19 +180,19 @@ export default function AudioPlayer({ src, duration, transcriptionStatus }: Audi
       </span>
 
       {/* Transcription badge */}
-      {transcriptionStatus && (
+      {resolvedTranscription && resolvedTranscription !== 'none' && (
         <span
           className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
-            transcriptionStatus === 'completed'
+            resolvedTranscription === 'completed'
               ? 'bg-sage/10 text-sage'
-              : transcriptionStatus === 'processing'
+              : resolvedTranscription === 'processing'
               ? 'bg-amber/10 text-amber animate-pulse-sync'
               : 'bg-sand text-ink-muted'
           }`}
         >
-          {transcriptionStatus === 'completed'
+          {resolvedTranscription === 'completed'
             ? 'Transcribed'
-            : transcriptionStatus === 'processing'
+            : resolvedTranscription === 'processing'
             ? 'Transcribing...'
             : 'Pending'}
         </span>
