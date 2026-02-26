@@ -249,6 +249,87 @@ export interface UsageResponse {
   pre_grace_plan?: string;
 }
 
+// ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+
+export interface AiConversation {
+  id: string;
+  workspace_id: string;
+  note_id: string | null;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AiMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  citations?: { url: string; title?: string }[];
+  model?: string;
+  created_at: string;
+}
+
+export interface AiStatusResponse {
+  enabled: boolean;
+  provider: string;
+  message: string;
+}
+
+export interface SummarizeResponse {
+  summary: string;
+  coming_soon: boolean;
+  model: string;
+}
+
+export interface ChatResponse {
+  conversation_id: string;
+  message: AiMessage;
+  coming_soon: boolean;
+}
+
+export interface CompleteResponse {
+  completion: string;
+  coming_soon: boolean;
+}
+
+export interface AiConversationWithMessages extends AiConversation {
+  messages: AiMessage[];
+}
+
+export interface SuggestedTag {
+  id: string;
+  name: string;
+  tag_type: 'entity' | 'concept';
+  entity_type?: string;
+  score: number;
+}
+
+export interface RelatedNote {
+  id: string;
+  title: string;
+  note_type: NoteType;
+  body_text: string;
+  shared_entities: number;
+  shared_concepts: number;
+  relevance_score: number;
+  created_at: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  title: string;
+  note_type: NoteType;
+  location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  entity_count: number;
+  concept_count: number;
+  created_at: string;
+}
+
 export interface MapLocation {
   id: string;
   name: string;

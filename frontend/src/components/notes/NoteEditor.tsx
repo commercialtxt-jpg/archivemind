@@ -7,11 +7,14 @@ import { useNote, useUpdateNote, useToggleStar } from '../../hooks/useNotes';
 import { useMedia } from '../../hooks/useMedia';
 import { useEditorStore } from '../../stores/editorStore';
 import { useRoutines } from '../../hooks/useRoutines';
+import { useAiComplete, useAiStatus } from '../../hooks/useAI';
+import { useUsage } from '../../hooks/useUsage';
 import EditorToolbar from '../editor/EditorToolbar';
 import NoteMetaBar from './NoteMetaBar';
 import AudioPlayer from '../media/AudioPlayer';
 import PhotoStrip from '../media/PhotoStrip';
 import OfflineBar from '../ui/OfflineBar';
+import { getTemplate } from '../../lib/templates';
 
 export default function NoteEditor() {
   const { activeNoteId, setDirty } = useEditorStore();
@@ -38,6 +41,21 @@ export default function NoteEditor() {
   // Fetch media counts so we can auto-show players when media exists
   const { data: audioMedia } = useMedia(activeNoteId, 'audio');
   const { data: photoMedia } = useMedia(activeNoteId, 'photo');
+
+  // AI autocompletion
+  const aiComplete = useAiComplete();
+  const { data: aiStatus } = useAiStatus();
+  const { data: usage } = useUsage();
+  const tier = usage?.plan ?? 'free';
+  const hasAi = (tier === 'pro' || tier === 'team') && aiStatus?.enabled;
+  const [completion, setCompletion] = useState<string | null>(null);
+  const completionTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Word count / reading time
+  const [wordCount, setWordCount] = useState(0);
+  const [charCount, setCharCount] = useState(0);
+
+  const readingTime = Math.max(1, Math.ceil(wordCount / 238));
 
   const hasAudio =
     isRecording ||
@@ -72,18 +90,44 @@ export default function NoteEditor() {
     },
     onUpdate: ({ editor }) => {
       setDirty(true);
+      // Update word/char counts
+      const text = editor.getText();
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      setWordCount(words);
+      setCharCount(text.length);
+
+      // Clear any pending completion
+      setCompletion(null);
+      if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current);
+
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        // Read from the ref — avoids the stale-closure bug where an old
-        // note's debounce timer fires and saves into the newly-created note.
         const currentId = activeNoteIdRef.current;
         if (currentId) {
           const json = editor.getJSON();
-          const text = editor.getText();
-          updateNote.mutate({ id: currentId, body: json as never, body_text: text } as never);
+          const t = editor.getText();
+          updateNote.mutate({ id: currentId, body: json as never, body_text: t } as never);
           setDirty(false);
         }
       }, 1000);
+
+      // Trigger AI autocompletion after 3s of pause (if AI enabled and text is long enough)
+      if (hasAi && text.length > 50) {
+        completionTimeoutRef.current = setTimeout(async () => {
+          const lastChars = text.slice(-500);
+          try {
+            const result = await aiComplete.mutateAsync({
+              noteId: activeNoteIdRef.current,
+              text: lastChars,
+            });
+            if (result.completion && !result.coming_soon) {
+              setCompletion(result.completion);
+            }
+          } catch {
+            // Silently ignore completion errors
+          }
+        }, 3000);
+      }
     },
   });
 
@@ -107,9 +151,16 @@ export default function NoteEditor() {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = undefined;
     }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = undefined;
+    }
+    setCompletion(null);
 
     // Immediately reset title and editor content.
     setTitle('');
+    setWordCount(0);
+    setCharCount(0);
     if (editor) {
       editor.commands.setContent('');
     }
@@ -123,6 +174,13 @@ export default function NoteEditor() {
     if (!note) return;
 
     setTitle(note.title);
+
+    // Set initial word/char counts
+    if (note.body_text) {
+      const words = note.body_text.trim() ? note.body_text.trim().split(/\s+/).length : 0;
+      setWordCount(words);
+      setCharCount(note.body_text.length);
+    }
 
     if (editor) {
       const hasBody =
@@ -138,12 +196,33 @@ export default function NoteEditor() {
           editor.commands.setContent(note.body);
         }
       } else {
-        // New / empty note — make sure the editor is blank.
-        editor.commands.setContent('');
+        // New / empty note — apply smart template if available
+        const template = note.note_type ? getTemplate(note.note_type) : null;
+        if (template) {
+          editor.commands.setContent(template);
+        } else {
+          editor.commands.setContent('');
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id]); // Only re-run when the note ID changes, not on every refetch
+
+  // Tab key to accept AI completion
+  useEffect(() => {
+    if (!completion) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && completion && editor) {
+        e.preventDefault();
+        editor.chain().focus().insertContent(completion).run();
+        setCompletion(null);
+      } else if (e.key === 'Escape' && completion) {
+        setCompletion(null);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [completion, editor]);
 
   // Auto-resize title textarea
   useEffect(() => {
@@ -275,6 +354,37 @@ export default function NoteEditor() {
             <EditorContent editor={editor} />
           </div>
 
+          {/* AI Completion suggestion */}
+          {completion && (
+            <div className="mt-2 px-1">
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-parchment border border-amber/15">
+                <span className="text-[11px] text-amber mt-0.5 flex-shrink-0">{'\u2728'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-ink-muted font-serif italic leading-relaxed">{completion}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <button
+                      onClick={() => {
+                        if (editor) {
+                          editor.chain().focus().insertContent(completion).run();
+                          setCompletion(null);
+                        }
+                      }}
+                      className="text-[10px] font-medium text-coral hover:text-coral-dark cursor-pointer transition-colors"
+                    >
+                      Accept (Tab)
+                    </button>
+                    <button
+                      onClick={() => setCompletion(null)}
+                      className="text-[10px] text-ink-ghost hover:text-ink-muted cursor-pointer transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Graph Note box */}
           {note && (
             <div
@@ -285,12 +395,22 @@ export default function NoteEditor() {
               }}
             >
               <div className="flex items-center gap-2 text-[12px] text-amber font-medium mb-1">
-                <span>🔗</span>
+                <span>{'\uD83D\uDD17'}</span>
                 Graph Note
               </div>
               <p className="text-[11.5px] text-ink-muted">
                 This note connects to entities and concepts in your knowledge graph.
               </p>
+            </div>
+          )}
+
+          {/* Writing stats */}
+          {note && (
+            <div className="mt-4 flex items-center gap-4 text-[10px] text-ink-ghost">
+              <span>{wordCount.toLocaleString()} {wordCount === 1 ? 'word' : 'words'}</span>
+              <span>{charCount.toLocaleString()} chars</span>
+              <span>{readingTime} min read</span>
+              {hasAi && <span className="text-coral/50">{'\u2728'} AI enabled</span>}
             </div>
           )}
         </div>

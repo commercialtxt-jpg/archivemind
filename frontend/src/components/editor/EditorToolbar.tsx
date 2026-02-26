@@ -5,6 +5,9 @@ import { useOfflineStore } from '../../stores/offlineStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useUploadMedia } from '../../hooks/useMedia';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
+import { useSummarize, useAiStatus } from '../../hooks/useAI';
+import { useUsage } from '../../hooks/useUsage';
+import UpgradePrompt from '../shared/UpgradePrompt';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -32,6 +35,14 @@ export default function EditorToolbar({
   const uploadMedia = useUploadMedia();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isRecording, startRecording, stopRecording } = useAudioRecorder();
+  const summarize = useSummarize();
+  const { data: aiStatus } = useAiStatus();
+  const { data: usage } = useUsage();
+  const [summary, setSummary] = useState<string | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const tier = usage?.plan ?? 'free';
+  const hasAiAccess = tier === 'pro' || tier === 'team';
 
   // Listen for FAB record button event
   useEffect(() => {
@@ -135,6 +146,28 @@ export default function EditorToolbar({
     onRecordingStart?.();
   };
 
+  const handleSummarize = async () => {
+    if (!note) {
+      showToast('Select a note first');
+      return;
+    }
+    if (!hasAiAccess) {
+      setShowUpgrade(true);
+      return;
+    }
+    try {
+      const result = await summarize.mutateAsync(note.id);
+      setSummary(result.summary);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
+      if (axiosErr?.response?.status === 403) {
+        setShowUpgrade(true);
+      } else {
+        showToast('Summarize failed');
+      }
+    }
+  };
+
   return (
     <div className="relative bg-warm-white border-b border-border-light">
       {/* Hidden file input for photo upload */}
@@ -225,6 +258,29 @@ export default function EditorToolbar({
             onClick={handleVoiceClick}
           />
           <FormatBtn label="📸" title="Upload photo" onClick={handlePhotoClick} />
+
+          <div className="w-px h-4 bg-border-light mx-1" />
+
+          {/* AI Summarize */}
+          <button
+            onClick={handleSummarize}
+            disabled={summarize.isPending}
+            title={hasAiAccess ? 'AI Summarize' : 'AI features require Pro plan'}
+            className={`
+              flex items-center gap-1 min-w-[28px] h-7 px-2 rounded-md text-[12px] transition-all cursor-pointer
+              ${summarize.isPending
+                ? 'bg-coral/10 text-coral animate-pulse'
+                : hasAiAccess
+                  ? 'text-ink-muted hover:bg-glow-coral hover:text-coral'
+                  : 'text-ink-ghost'
+              }
+            `}
+          >
+            {hasAiAccess ? '\u2728' : '\uD83D\uDD12'}
+            <span className="hidden md:inline text-[11px]">
+              {summarize.isPending ? 'Summarizing...' : 'AI'}
+            </span>
+          </button>
         </div>
       )}
 
@@ -234,6 +290,35 @@ export default function EditorToolbar({
           <span className="w-2 h-2 rounded-full bg-coral animate-pulse" aria-hidden="true" />
           <span className="text-[11px] text-coral font-medium">Recording — click ⏹ to stop</span>
         </div>
+      )}
+
+      {/* AI Summary card */}
+      {summary && (
+        <div className="mx-4 my-2 p-3 rounded-lg bg-parchment border border-amber/20 relative">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-semibold text-amber flex items-center gap-1">
+              &#x2728; AI Summary
+            </span>
+            <button
+              onClick={() => setSummary(null)}
+              className="text-[11px] text-ink-ghost hover:text-ink-muted transition-colors cursor-pointer"
+            >
+              &#x2715;
+            </button>
+          </div>
+          <div className="text-[12px] text-ink font-serif leading-relaxed whitespace-pre-wrap">
+            {summary}
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade prompt */}
+      {showUpgrade && (
+        <UpgradePrompt
+          resource="ai_requests"
+          message="AI features require a Pro or Team plan."
+          onDismiss={() => setShowUpgrade(false)}
+        />
       )}
 
       {/* Toast notification */}

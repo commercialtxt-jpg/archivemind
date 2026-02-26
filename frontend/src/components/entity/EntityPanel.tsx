@@ -7,10 +7,11 @@ import { useEntities, useEntity, useEntityTopics, useEntityNotes } from '../../h
 import { useInventory, useUpdateInventoryItem } from '../../hooks/useInventory';
 import { useMapLocations, useTrackMapLoad } from '../../hooks/useMap';
 import type { Entity, InventoryItem, NoteSummary, MapLocation } from '../../types';
+import AITab from '../ai/AITab';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
 
-type Tab = 'entity' | 'linked' | 'map' | 'gear';
+type Tab = 'entity' | 'linked' | 'map' | 'gear' | 'ai';
 
 // ---------------------------------------------------------------------------
 // Root panel
@@ -127,6 +128,7 @@ export default function EntityPanel() {
         {activeTab === 'linked' && <LinkedTab />}
         {activeTab === 'map' && <MapTab />}
         {activeTab === 'gear' && <GearTab />}
+        {activeTab === 'ai' && <AITab />}
       </div>
     </div>
   );
@@ -142,6 +144,7 @@ function TabBar({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: T
     { key: 'linked', label: 'Linked' },
     { key: 'map', label: 'Map' },
     { key: 'gear', label: 'Gear' },
+    { key: 'ai', label: 'AI' },
   ];
 
   return (

@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod budget;
 pub mod concept;
 pub mod entity;

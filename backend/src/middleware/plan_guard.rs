@@ -177,6 +177,10 @@ pub async fn check_limit(
             let usage = ensure_usage_record(pool, user_id, workspace_id).await?;
             usage.map_loads as i64
         }
+        "ai_requests" => {
+            let usage = ensure_usage_record(pool, user_id, workspace_id).await?;
+            usage.ai_requests as i64
+        }
         _ => 0,
     };
 
@@ -231,6 +235,11 @@ pub async fn increment_usage(
             "INSERT INTO usage_tracking (user_id, workspace_id, period_start, storage_bytes) \
              VALUES ($1, $2, $3, $4) \
              ON CONFLICT (user_id, period_start) DO UPDATE SET storage_bytes = usage_tracking.storage_bytes + $4, updated_at = now()"
+        }
+        "ai_requests" => {
+            "INSERT INTO usage_tracking (user_id, workspace_id, period_start, ai_requests) \
+             VALUES ($1, $2, $3, $4) \
+             ON CONFLICT (user_id, period_start) DO UPDATE SET ai_requests = usage_tracking.ai_requests + $4, updated_at = now()"
         }
         _ => return Ok(()),
     };

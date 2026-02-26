@@ -10,6 +10,8 @@ pub struct Config {
     pub mapbox_monthly_cap: i64,
     pub lemonsqueezy_webhook_secret: String,
     pub lemonsqueezy_api_key: String,
+    pub perplexity_api_key: String,
+    pub anthropic_api_key: String,
 }
 
 impl Config {
@@ -34,6 +36,10 @@ impl Config {
             lemonsqueezy_webhook_secret: env::var("LEMONSQUEEZY_WEBHOOK_SECRET")
                 .unwrap_or_else(|_| String::new()),
             lemonsqueezy_api_key: env::var("LEMONSQUEEZY_API_KEY")
+                .unwrap_or_else(|_| String::new()),
+            perplexity_api_key: env::var("PERPLEXITY_API_KEY")
+                .unwrap_or_else(|_| String::new()),
+            anthropic_api_key: env::var("ANTHROPIC_API_KEY")
                 .unwrap_or_else(|_| String::new()),
         }
     }
