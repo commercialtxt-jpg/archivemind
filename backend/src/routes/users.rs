@@ -45,7 +45,8 @@ async fn register(
     let user = sqlx::query_as::<_, User>(
         "INSERT INTO users (email, password_hash, display_name, avatar_initials)
          VALUES ($1, $2, $3, $4)
-         RETURNING *",
+         RETURNING id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
+         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id",
     )
     .bind(&body.email)
     .bind(&password_hash)
@@ -94,7 +95,11 @@ async fn login(
     axum::Extension(config): axum::Extension<Config>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
+         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id \
+         FROM users WHERE email = $1"
+    )
         .bind(&body.email)
         .fetch_optional(&pool)
         .await?
@@ -127,7 +132,11 @@ async fn login(
 }
 
 async fn me(auth: AuthUser, State(pool): State<PgPool>) -> Result<Json<UserProfile>, AppError> {
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, display_name, avatar_initials, created_at, updated_at, \
+         plan::text, plan_started_at, plan_expires_at, stripe_customer_id, stripe_subscription_id \
+         FROM users WHERE id = $1"
+    )
         .bind(auth.user_id)
         .fetch_one(&pool)
         .await?;

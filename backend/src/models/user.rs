@@ -11,6 +11,11 @@ pub struct User {
     pub avatar_initials: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub plan: String,
+    pub plan_started_at: Option<DateTime<Utc>>,
+    pub plan_expires_at: Option<DateTime<Utc>>,
+    pub stripe_customer_id: Option<String>,
+    pub stripe_subscription_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

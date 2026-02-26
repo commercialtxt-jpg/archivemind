@@ -1,7 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import api from '../lib/api';
 import type { ApiResponse, Note, NoteSummary, NoteCount } from '../types';
 import { cacheNotes, getCachedNotes } from '../lib/offlineDb';
+
+/** Extract a 403 plan-limit error message from an Axios error, or null. */
+function getPlanLimitError(err: unknown): string | null {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const resp = (err as { response?: { status?: number; data?: { error?: string } } }).response;
+    if (resp?.status === 403 && resp.data?.error) {
+      return resp.data.error;
+    }
+  }
+  return null;
+}
+
+/** Hook that exposes plan-limit error state for UI display. */
+export function usePlanLimitError() {
+  const [limitError, setLimitError] = useState<string | null>(null);
+  return { limitError, setLimitError, clearLimitError: () => setLimitError(null) };
+}
 
 interface NoteFilters {
   note_type?: string;
@@ -139,12 +157,17 @@ export function useCreateNote() {
 
       return { snapshots };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       // Roll back all list caches on error
       if (context?.snapshots) {
         for (const [key, prev] of context.snapshots) {
           queryClient.setQueryData(key, prev);
         }
+      }
+      // Emit plan-limit event for 403 responses
+      const msg = getPlanLimitError(err);
+      if (msg) {
+        window.dispatchEvent(new CustomEvent('plan-limit-error', { detail: { resource: 'notes', message: msg } }));
       }
     },
     onSettled: () => {

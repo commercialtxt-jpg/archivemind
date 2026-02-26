@@ -9,7 +9,9 @@ pub mod media;
 pub mod notes;
 pub mod routines;
 pub mod search;
+pub mod settings;
 pub mod tags;
+pub mod usage;
 pub mod users;
 
 use axum::Router;
@@ -32,6 +34,8 @@ pub fn build_router(pool: PgPool, config: Config) -> Router {
         .merge(routines::routes())
         .merge(graph::routes())
         .merge(map::routes())
+        .merge(usage::routes())
+        .merge(settings::routes())
         .with_state(pool)
         .layer(axum::Extension(config))
 }

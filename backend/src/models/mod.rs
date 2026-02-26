@@ -6,6 +6,7 @@ pub mod inventory;
 pub mod map;
 pub mod media;
 pub mod note;
+pub mod plan;
 pub mod routine;
 pub mod tag;
 pub mod user;

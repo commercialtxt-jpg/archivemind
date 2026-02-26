@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod error;
+pub mod middleware;
 mod models;
 mod response;
 mod routes;

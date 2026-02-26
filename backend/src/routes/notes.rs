@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
+use crate::middleware::plan_guard;
 use crate::models::entity::Entity;
 use crate::models::note::*;
 use crate::response::ApiResponse;
@@ -441,6 +442,9 @@ async fn create_note(
     State(pool): State<PgPool>,
     Json(body): Json<CreateNote>,
 ) -> Result<Json<ApiResponse<Note>>, AppError> {
+    // Check plan limit
+    plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "notes").await?;
+
     let title = if body.title.is_empty() { "Untitled".to_string() } else { body.title.clone() };
 
     let mut tx = pool
@@ -541,6 +545,9 @@ async fn create_note(
     tx.commit()
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Increment usage counter (best-effort)
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "notes_count", 1).await;
 
     Ok(ApiResponse::ok(note))
 }

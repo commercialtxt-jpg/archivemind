@@ -203,7 +203,48 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
-export type View = 'journal' | 'graph' | 'map' | 'entities' | 'inventory' | 'routines';
+export type View = 'journal' | 'graph' | 'map' | 'entities' | 'inventory' | 'routines' | 'settings';
+
+// ---------------------------------------------------------------------------
+// Plan & Usage
+// ---------------------------------------------------------------------------
+
+export type PlanTier = 'free' | 'pro' | 'team';
+
+export interface PlanLimits {
+  tier: PlanTier;
+  map_loads: number;
+  storage_bytes: number;
+  notes: number;
+  entities: number;
+  media_uploads: number;
+  ai_requests: number;
+  workspaces: number;
+  team_members: number;
+  price_cents: number;
+}
+
+export interface UsageRecord {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  period_start: string;
+  map_loads: number;
+  media_uploads: number;
+  storage_bytes: number;
+  notes_count: number;
+  entities_count: number;
+  ai_requests: number;
+  updated_at: string;
+}
+
+export interface UsageResponse {
+  plan: PlanTier;
+  limits: PlanLimits;
+  usage: UsageRecord;
+  plan_started_at: string | null;
+  plan_expires_at: string | null;
+}
 
 export interface MapLocation {
   id: string;

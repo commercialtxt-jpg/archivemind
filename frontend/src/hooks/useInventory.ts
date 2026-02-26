@@ -74,9 +74,16 @@ export function useCreateInventoryItem() {
 
       return { prev };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.prev) {
         queryClient.setQueryData(['inventory'], context.prev);
+      }
+      // Emit plan-limit event for 403 responses
+      if (err && typeof err === 'object' && 'response' in err) {
+        const resp = (err as { response?: { status?: number; data?: { error?: string } } }).response;
+        if (resp?.status === 403 && resp.data?.error) {
+          window.dispatchEvent(new CustomEvent('plan-limit-error', { detail: { resource: 'inventory', message: resp.data.error } }));
+        }
       }
     },
     onSettled: () => {

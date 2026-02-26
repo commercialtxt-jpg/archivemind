@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
+use crate::middleware::plan_guard;
 use crate::models::media::*;
 use crate::response::ApiResponse;
 
@@ -75,6 +76,11 @@ async fn upload_media(
     }
 
     let file_bytes = file_bytes.ok_or_else(|| AppError::BadRequest("No file provided".to_string()))?;
+
+    // Check plan limits for media uploads and storage
+    plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "media_uploads").await?;
+    plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "storage_bytes").await?;
+
     let media_type_str = media_type_str.unwrap_or_else(|| "photo".to_string());
     let file_size_bytes = file_bytes.len() as i64;
 
@@ -125,6 +131,10 @@ async fn upload_media(
     .bind(file_size_bytes)
     .fetch_one(&pool)
     .await?;
+
+    // Increment usage counters (best-effort)
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "media_uploads", 1).await;
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "storage_bytes", file_size_bytes).await;
 
     Ok(ApiResponse::ok(media))
 }

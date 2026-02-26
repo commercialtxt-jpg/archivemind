@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
+use crate::middleware::plan_guard;
 use crate::models::entity::*;
 use crate::models::note::NoteSummary;
 use crate::response::ApiResponse;
@@ -97,6 +98,9 @@ async fn create_entity(
     State(pool): State<PgPool>,
     Json(body): Json<CreateEntity>,
 ) -> Result<Json<ApiResponse<Entity>>, AppError> {
+    // Check plan limit
+    plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "entities").await?;
+
     if body.name.is_empty() {
         return Err(AppError::BadRequest("Name is required".to_string()));
     }
@@ -122,6 +126,9 @@ async fn create_entity(
     .bind(&initials)
     .fetch_one(&pool)
     .await?;
+
+    // Increment usage counter (best-effort)
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "entities_count", 1).await;
 
     Ok(ApiResponse::ok(entity))
 }

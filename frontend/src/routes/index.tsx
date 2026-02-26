@@ -6,6 +6,7 @@ import MapView from '../views/MapView';
 import EntitiesView from '../views/EntitiesView';
 import InventoryView from '../views/InventoryView';
 import RoutinesView from '../views/RoutinesView';
+import SettingsView from '../views/SettingsView';
 import LoginPage from '../views/LoginPage';
 import ProtectedRoute from './ProtectedRoute';
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: 'entities', element: <EntitiesView /> },
       { path: 'inventory', element: <InventoryView /> },
       { path: 'routines', element: <RoutinesView /> },
+      { path: 'settings', element: <SettingsView /> },
     ],
   },
 ]);

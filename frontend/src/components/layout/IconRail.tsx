@@ -81,8 +81,29 @@ export default function IconRail() {
         );
       })}
 
+      {/* Settings */}
+      <div className="mt-auto mb-2">
+        <Tooltip text="Settings" position="right">
+          <button
+            onClick={() => navigate('/settings')}
+            aria-label="Settings"
+            aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined}
+            className={`
+              flex items-center justify-center w-10 h-10 rounded-[10px] text-lg
+              transition-all duration-150 cursor-pointer
+              ${location.pathname.startsWith('/settings')
+                ? 'bg-coral text-white shadow-coral-rail'
+                : 'text-ink-muted hover:bg-sand hover:text-ink'
+              }
+            `}
+          >
+            ⚙️
+          </button>
+        </Tooltip>
+      </div>
+
       {/* User avatar + logout menu */}
-      <div className="mt-auto relative">
+      <div className="relative">
         <Tooltip text={showUserMenu ? '' : (user?.display_name || 'Profile')} position="right">
           <button
             type="button"

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
+use crate::middleware::plan_guard;
 use crate::models::map::MapLocation;
 use crate::response::ApiResponse;
 
@@ -116,6 +117,9 @@ async fn map_locations(
     auth: AuthUser,
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<MapLocation>>>, AppError> {
+    // Increment map loads counter (best-effort, don't block on limit)
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "map_loads", 1).await;
+
     let mut locations: Vec<MapLocation> = Vec::new();
 
     // ── 1. Notes with GPS data ──────────────────────────────────────────────
