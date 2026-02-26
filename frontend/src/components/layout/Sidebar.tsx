@@ -110,18 +110,10 @@ export default function Sidebar() {
     <aside className="flex flex-col w-60 shrink-0 bg-sidebar-bg border-r border-border-light overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2 mb-1">
-          <div
-            className="flex items-center justify-center w-7 h-7 rounded-lg"
-            style={{ background: 'linear-gradient(135deg, var(--color-coral), var(--color-amber))' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" width="16" height="16">
-              <path d="M6 28L14 4H18L26 28H21.5L19.5 22H12.5L10.5 28Z" fill="#FAF7F2"/>
-              <path d="M16 16.2C14.2 15.8 12.2 17 11.8 18.5C12.8 18.8 14.6 18.2 16 16.2Z" fill="#FAF7F2" opacity="0.85"/>
-              <path d="M16 16.2C17.8 15.8 19.8 17 20.2 18.5C19.2 18.8 17.4 18.2 16 16.2Z" fill="#FAF7F2" opacity="0.85"/>
-            </svg>
-          </div>
-          <span className="font-serif text-sm font-semibold text-ink">ArchiveMind</span>
+        <div className="flex items-center mb-1">
+          <span className="font-serif text-[15px] font-semibold tracking-tight">
+            <span className="text-coral">Archive</span><span className="text-ink">Mind</span>
+          </span>
         </div>
         <h2 className="font-serif text-[15px] font-semibold text-ink mb-3">Field Research</h2>
         <div className="relative">

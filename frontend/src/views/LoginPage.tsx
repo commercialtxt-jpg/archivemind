@@ -44,14 +44,10 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-cream">
       <div className="w-full max-w-sm p-8 bg-warm-white rounded-xl border border-border shadow-card">
         {/* Branding */}
-        <div className="flex items-center gap-2 mb-6">
-          <div
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-white font-serif text-sm font-semibold"
-            style={{ background: 'linear-gradient(135deg, var(--color-coral), var(--color-amber))' }}
-          >
-            A
-          </div>
-          <span className="font-serif text-lg font-semibold text-ink">ArchiveMind</span>
+        <div className="flex items-center mb-6">
+          <span className="font-serif text-xl font-semibold tracking-tight">
+            <span className="text-coral">Archive</span><span className="text-ink">Mind</span>
+          </span>
         </div>
 
         <h1 className="font-serif text-xl font-semibold text-ink mb-6">
