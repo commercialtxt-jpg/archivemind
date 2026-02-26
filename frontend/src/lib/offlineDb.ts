@@ -5,7 +5,7 @@
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { NoteSummary, EntityWithStats } from '../types';
+import type { NoteSummary, EntityWithStats, Concept, FieldTrip, InventoryItem, Routine, Media } from '../types';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -37,6 +37,28 @@ interface ArchiveMindDB extends DBSchema {
     value: PendingChange;
     indexes: { 'by-created': string };
   };
+  concepts: {
+    key: string;
+    value: Concept;
+  };
+  fieldTrips: {
+    key: string;
+    value: FieldTrip;
+  };
+  inventory: {
+    key: string;
+    value: InventoryItem;
+    indexes: { 'by-category': string };
+  };
+  routines: {
+    key: string;
+    value: Routine;
+  };
+  mediaMetadata: {
+    key: string;
+    value: Media;
+    indexes: { 'by-note': string };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -48,24 +70,39 @@ let _db: IDBPDatabase<ArchiveMindDB> | null = null;
 async function getDb(): Promise<IDBPDatabase<ArchiveMindDB>> {
   if (_db) return _db;
 
-  _db = await openDB<ArchiveMindDB>('archivemind', 1, {
-    upgrade(db) {
-      // notes store
-      if (!db.objectStoreNames.contains('notes')) {
+  _db = await openDB<ArchiveMindDB>('archivemind', 2, {
+    upgrade(db, oldVersion) {
+      // Version 1 stores
+      if (oldVersion < 1) {
         const notesStore = db.createObjectStore('notes', { keyPath: 'id' });
         notesStore.createIndex('by-updated', 'updated_at');
-      }
 
-      // entities store
-      if (!db.objectStoreNames.contains('entities')) {
         const entitiesStore = db.createObjectStore('entities', { keyPath: 'id' });
         entitiesStore.createIndex('by-type', 'entity_type');
-      }
 
-      // pendingChanges store
-      if (!db.objectStoreNames.contains('pendingChanges')) {
         const pendingStore = db.createObjectStore('pendingChanges', { keyPath: 'id' });
         pendingStore.createIndex('by-created', 'createdAt');
+      }
+
+      // Version 2 stores
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains('concepts')) {
+          db.createObjectStore('concepts', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('fieldTrips')) {
+          db.createObjectStore('fieldTrips', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('inventory')) {
+          const invStore = db.createObjectStore('inventory', { keyPath: 'id' });
+          invStore.createIndex('by-category', 'category');
+        }
+        if (!db.objectStoreNames.contains('routines')) {
+          db.createObjectStore('routines', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('mediaMetadata')) {
+          const mediaStore = db.createObjectStore('mediaMetadata', { keyPath: 'id' });
+          mediaStore.createIndex('by-note', 'note_id');
+        }
       }
     },
   });
@@ -193,5 +230,133 @@ export async function countPendingChanges(): Promise<number> {
   } catch (err) {
     console.warn('[offlineDb] Failed to count pending changes:', err);
     return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Concepts
+// ---------------------------------------------------------------------------
+
+export async function cacheConcepts(concepts: Concept[]): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction('concepts', 'readwrite');
+    await Promise.all(concepts.map((c) => tx.store.put(c)));
+    await tx.done;
+  } catch (err) {
+    console.warn('[offlineDb] Failed to cache concepts:', err);
+  }
+}
+
+export async function getCachedConcepts(): Promise<Concept[]> {
+  try {
+    const db = await getDb();
+    return await db.getAll('concepts');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get cached concepts:', err);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Field Trips
+// ---------------------------------------------------------------------------
+
+export async function cacheFieldTrips(trips: FieldTrip[]): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction('fieldTrips', 'readwrite');
+    await Promise.all(trips.map((ft) => tx.store.put(ft)));
+    await tx.done;
+  } catch (err) {
+    console.warn('[offlineDb] Failed to cache field trips:', err);
+  }
+}
+
+export async function getCachedFieldTrips(): Promise<FieldTrip[]> {
+  try {
+    const db = await getDb();
+    return await db.getAll('fieldTrips');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get cached field trips:', err);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory
+// ---------------------------------------------------------------------------
+
+export async function cacheInventory(items: InventoryItem[]): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction('inventory', 'readwrite');
+    await Promise.all(items.map((i) => tx.store.put(i)));
+    await tx.done;
+  } catch (err) {
+    console.warn('[offlineDb] Failed to cache inventory:', err);
+  }
+}
+
+export async function getCachedInventory(): Promise<InventoryItem[]> {
+  try {
+    const db = await getDb();
+    return await db.getAll('inventory');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get cached inventory:', err);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Routines
+// ---------------------------------------------------------------------------
+
+export async function cacheRoutines(routines: Routine[]): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction('routines', 'readwrite');
+    await Promise.all(routines.map((r) => tx.store.put(r)));
+    await tx.done;
+  } catch (err) {
+    console.warn('[offlineDb] Failed to cache routines:', err);
+  }
+}
+
+export async function getCachedRoutines(): Promise<Routine[]> {
+  try {
+    const db = await getDb();
+    return await db.getAll('routines');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get cached routines:', err);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Media Metadata
+// ---------------------------------------------------------------------------
+
+export async function cacheMediaMetadata(media: Media[]): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction('mediaMetadata', 'readwrite');
+    await Promise.all(media.map((m) => tx.store.put(m)));
+    await tx.done;
+  } catch (err) {
+    console.warn('[offlineDb] Failed to cache media metadata:', err);
+  }
+}
+
+export async function getCachedMediaMetadata(noteId?: string): Promise<Media[]> {
+  try {
+    const db = await getDb();
+    if (noteId) {
+      return await db.getAllFromIndex('mediaMetadata', 'by-note', noteId);
+    }
+    return await db.getAll('mediaMetadata');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get cached media metadata:', err);
+    return [];
   }
 }

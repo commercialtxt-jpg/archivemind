@@ -9,7 +9,16 @@ import api from '../../lib/api';
 import type { ApiResponse, Entity } from '../../types';
 import SyncStatus from '../ui/SyncStatus';
 
-export default function Sidebar() {
+// ---------------------------------------------------------------------------
+// SidebarContent — shared between desktop Sidebar and mobile MobileDrawer
+// ---------------------------------------------------------------------------
+
+interface SidebarContentProps {
+  /** Called after any navigation/filter item is clicked. Used by MobileDrawer to auto-close. */
+  onItemClick?: () => void;
+}
+
+export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const navigate = useNavigate();
   const { sidebarFilter, setSidebarFilter, setSearchQuery } = useUIStore();
   const { data: counts } = useNoteCounts();
@@ -104,10 +113,11 @@ export default function Sidebar() {
   const handleEntityTypeClick = (type: string, label: string) => {
     setSidebarFilter({ type: 'entity_type', id: type, label });
     navigate('/entities');
+    onItemClick?.();
   };
 
   return (
-    <aside className="flex flex-col w-60 shrink-0 bg-sidebar-bg border-r border-border-light overflow-hidden">
+    <>
       {/* Header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center mb-1">
@@ -138,15 +148,18 @@ export default function Sidebar() {
           </h3>
           <SidebarItem
             icon="📓" label="All Notes" count={counts?.total}
-            active={isActive('all')} onClick={() => setSidebarFilter({ type: 'all' })}
+            active={isActive('all')}
+            onClick={() => { setSidebarFilter({ type: 'all' }); onItemClick?.(); }}
           />
           <SidebarItem
             icon="⭐" label="Starred" count={counts?.starred}
-            active={isActive('starred')} onClick={() => setSidebarFilter({ type: 'starred' })}
+            active={isActive('starred')}
+            onClick={() => { setSidebarFilter({ type: 'starred' }); onItemClick?.(); }}
           />
           <SidebarItem
             icon="🗑" label="Trash" count={counts?.deleted || undefined}
-            active={isActive('trash')} onClick={() => setSidebarFilter({ type: 'trash' })}
+            active={isActive('trash')}
+            onClick={() => { setSidebarFilter({ type: 'trash' }); onItemClick?.(); }}
           />
         </section>
 
@@ -199,7 +212,10 @@ export default function Sidebar() {
               key={ft.id}
               icon={ft.icon} label={ft.name} count={ft.note_count}
               active={isActive('field_trip', ft.id)}
-              onClick={() => setSidebarFilter({ type: 'field_trip', id: ft.id, label: ft.name })}
+              onClick={() => {
+                setSidebarFilter({ type: 'field_trip', id: ft.id, label: ft.name });
+                onItemClick?.();
+              }}
               onDelete={() => {
                 deleteFieldTrip.mutate(ft.id);
                 if (sidebarFilter.type === 'field_trip' && sidebarFilter.id === ft.id) {
@@ -263,7 +279,10 @@ export default function Sidebar() {
               key={c.id}
               icon={c.icon} label={c.name} count={c.note_count}
               active={isActive('concept', c.id)}
-              onClick={() => setSidebarFilter({ type: 'concept', id: c.id, label: c.name })}
+              onClick={() => {
+                setSidebarFilter({ type: 'concept', id: c.id, label: c.name });
+                onItemClick?.();
+              }}
               onDelete={() => {
                 deleteConcept.mutate(c.id);
                 if (sidebarFilter.type === 'concept' && sidebarFilter.id === c.id) {
@@ -305,6 +324,18 @@ export default function Sidebar() {
       <div className="border-t border-border-light">
         <SyncStatus />
       </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Desktop Sidebar wrapper
+// ---------------------------------------------------------------------------
+
+export default function Sidebar() {
+  return (
+    <aside className="flex flex-col w-60 shrink-0 bg-sidebar-bg border-r border-border-light overflow-hidden">
+      <SidebarContent />
     </aside>
   );
 }

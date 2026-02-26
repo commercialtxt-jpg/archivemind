@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { cacheFieldTrips, getCachedFieldTrips } from '../lib/offlineDb';
 import type { ApiResponse, FieldTrip } from '../types';
 
 export function useFieldTrips() {
@@ -8,8 +9,12 @@ export function useFieldTrips() {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<FieldTrip[]>>('/field-trips');
-        return data.data ?? [];
+        const trips = data.data ?? [];
+        cacheFieldTrips(trips).catch(() => {});
+        return trips;
       } catch {
+        const cached = await getCachedFieldTrips();
+        if (cached.length > 0) return cached;
         return [] as FieldTrip[];
       }
     },

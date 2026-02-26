@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { cacheConcepts, getCachedConcepts } from '../lib/offlineDb';
 import type { ApiResponse, Concept } from '../types';
 
 export function useConcepts() {
@@ -8,8 +9,13 @@ export function useConcepts() {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<Concept[]>>('/concepts');
-        return data.data ?? [];
+        const concepts = data.data ?? [];
+        cacheConcepts(concepts).catch(() => {});
+        return concepts;
       } catch {
+        // Fall back to cached data when offline
+        const cached = await getCachedConcepts();
+        if (cached.length > 0) return cached;
         return [] as Concept[];
       }
     },

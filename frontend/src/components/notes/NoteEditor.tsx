@@ -212,7 +212,7 @@ export default function NoteEditor() {
       <OfflineBar />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[780px] mx-auto px-[60px] py-10">
+        <div className="max-w-full md:max-w-[780px] mx-auto px-4 py-6 md:px-[60px] md:py-10">
           {/* Title */}
           <div className="flex items-start gap-2">
             <textarea
@@ -222,7 +222,7 @@ export default function NoteEditor() {
               onBlur={handleTitleBlur}
               placeholder="Untitled"
               rows={1}
-              className="flex-1 font-serif text-[28px] font-semibold leading-[1.25] text-ink
+              className="flex-1 font-serif text-[22px] md:text-[28px] font-semibold leading-[1.25] text-ink
                 bg-transparent border-none outline-none resize-none overflow-hidden
                 placeholder:text-ink-ghost"
             />

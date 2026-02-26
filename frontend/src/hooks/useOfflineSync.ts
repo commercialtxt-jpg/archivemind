@@ -23,9 +23,15 @@ export function useOfflineSync() {
       try {
         const flushed = await flushPendingChanges();
         if (flushed > 0) {
-          // Re-fetch server data after flushing queued mutations
-          await queryClient.invalidateQueries({ queryKey: ['notes'] });
-          await queryClient.invalidateQueries({ queryKey: ['entities'] });
+          // Re-fetch all server data after flushing queued mutations
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['notes'] }),
+            queryClient.invalidateQueries({ queryKey: ['entities'] }),
+            queryClient.invalidateQueries({ queryKey: ['concepts'] }),
+            queryClient.invalidateQueries({ queryKey: ['field-trips'] }),
+            queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+            queryClient.invalidateQueries({ queryKey: ['routines'] }),
+          ]);
         }
       } catch (err) {
         console.warn('[useOfflineSync] Error flushing pending changes:', err);

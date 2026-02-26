@@ -22,7 +22,7 @@ export default function SettingsView() {
 
   return (
     <div className="h-full overflow-y-auto view-enter">
-      <div className="max-w-[720px] mx-auto px-6 py-8">
+      <div className="max-w-[720px] mx-auto p-4 md:px-6 md:py-8">
         {/* Header */}
         <h1 className="text-2xl font-serif font-semibold text-ink mb-1">Settings</h1>
         <p className="text-[13px] text-ink-muted mb-6">Manage your plan, profile, and account</p>

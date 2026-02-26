@@ -40,15 +40,15 @@ export default function OfflineBar() {
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 px-4 py-1.5 border-b border-amber/20 text-[12px] font-medium"
+        className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 md:py-1.5 border-b border-amber/20 text-[12px] font-medium"
         style={{ background: 'rgba(196,132,74,0.10)', color: 'var(--color-amber)' }}
       >
         <span aria-hidden="true">📡</span>
-        <span>
-          Offline
+        <span className="flex-1">
+          Viewing cached data
           {pendingChanges > 0
             ? ` — ${pendingChanges} change${pendingChanges > 1 ? 's' : ''} pending`
-            : ' — changes saved locally'}
+            : ''}
         </span>
       </div>
     );

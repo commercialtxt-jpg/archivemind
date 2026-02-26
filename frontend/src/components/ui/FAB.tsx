@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 interface FABProps {
   onNewNote: () => void;
@@ -9,6 +10,7 @@ interface FABProps {
 
 export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps) {
   const activeNoteId = useEditorStore((s) => s.activeNoteId);
+  const isMobile = useIsMobile();
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -25,8 +27,12 @@ export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps)
     window.dispatchEvent(new CustomEvent('archivemind:start-recording'));
   };
 
+  const positionClass = isMobile
+    ? 'bottom-20 right-4'
+    : 'bottom-7 right-[320px]';
+
   return (
-    <div className="fixed bottom-7 right-[320px] flex items-center gap-2 z-30 animate-slide-up">
+    <div className={`fixed ${positionClass} flex items-center gap-2 z-30 animate-slide-up`}>
       {/* Toast */}
       {toast && (
         <div
@@ -47,7 +53,7 @@ export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps)
           title="Quick field capture"
         >
           <span className="text-[14px]">📍</span>
-          Capture
+          {!isMobile && 'Capture'}
         </button>
       )}
       <button
@@ -59,7 +65,7 @@ export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps)
         title={activeNoteId ? 'Start voice recording' : 'Select a note first'}
       >
         <span className="text-[14px]">🎙</span>
-        Record
+        {!isMobile && 'Record'}
       </button>
       <button
         onClick={onNewNote}
@@ -71,7 +77,7 @@ export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps)
         title="Create new note"
       >
         <span className="text-[14px]">✏️</span>
-        New Note
+        {!isMobile && 'New Note'}
       </button>
     </div>
   );

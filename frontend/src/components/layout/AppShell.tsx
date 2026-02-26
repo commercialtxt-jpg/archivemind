@@ -3,14 +3,19 @@ import { Outlet, useLocation } from 'react-router-dom';
 import IconRail from './IconRail';
 import Sidebar from './Sidebar';
 import StatusBar from './StatusBar';
+import BottomTabBar from './BottomTabBar';
+import MobileDrawer from './MobileDrawer';
 import UpgradePrompt from '../shared/UpgradePrompt';
+import InstallPrompt from '../ui/InstallPrompt';
 import { useWebSocketSync } from '../../hooks/useWebSocketSync';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 export default function AppShell() {
   useWebSocketSync();
   useOfflineSync();
 
+  const isMobile = useIsMobile();
   const { pathname } = useLocation();
   const showSidebar = pathname === '/' || pathname.startsWith('/journal');
 
@@ -29,13 +34,15 @@ export default function AppShell() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <div className="flex flex-1 min-h-0">
-        <IconRail />
-        {showSidebar && <Sidebar />}
-        <main className="flex-1 min-w-0 overflow-hidden">
+        {!isMobile && <IconRail />}
+        {!isMobile && showSidebar && <Sidebar />}
+        <main className={`flex-1 min-w-0 overflow-hidden${isMobile ? ' pb-16' : ''}`}>
           <Outlet />
         </main>
       </div>
-      <StatusBar />
+      {!isMobile && <StatusBar />}
+      {isMobile && <BottomTabBar />}
+      {isMobile && <MobileDrawer />}
 
       {/* Plan limit upgrade prompt */}
       {limitError && (
@@ -45,6 +52,8 @@ export default function AppShell() {
           onDismiss={() => setLimitError(null)}
         />
       )}
+
+      <InstallPrompt />
     </div>
   );
 }

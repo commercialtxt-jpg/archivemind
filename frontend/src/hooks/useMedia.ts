@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { cacheMediaMetadata, getCachedMediaMetadata } from '../lib/offlineDb';
 import type { ApiResponse, Media } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,16 @@ export function useMedia(noteId: string | null, mediaType?: 'photo' | 'audio') {
         if (noteId) params.set('note_id', noteId);
         if (mediaType) params.set('type', mediaType);
         const { data } = await api.get<ApiResponse<Media[]>>(`/media?${params}`);
-        return data.data ?? [];
+        const media = data.data ?? [];
+        if (media.length > 0) cacheMediaMetadata(media).catch(() => {});
+        return media;
       } catch {
+        if (noteId) {
+          const cached = await getCachedMediaMetadata(noteId);
+          if (cached.length > 0) {
+            return mediaType ? cached.filter((m) => m.media_type === mediaType) : cached;
+          }
+        }
         return [] as Media[];
       }
     },

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { cacheRoutines, getCachedRoutines } from '../lib/offlineDb';
 import type { ApiResponse, Routine, ChecklistItem } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -20,8 +21,12 @@ export function useRoutines() {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<Routine[]>>('/routines');
+        const routines = data.data ?? [];
+        cacheRoutines(routines).catch(() => {});
         return data;
       } catch {
+        const cached = await getCachedRoutines();
+        if (cached.length > 0) return { data: cached };
         return { data: [] as Routine[] };
       }
     },

@@ -42,7 +42,7 @@ export default function EntitiesView() {
 
   return (
     <div className="h-full overflow-y-auto bg-cream view-enter">
-      <div className="max-w-[960px] mx-auto px-8 py-8">
+      <div className="max-w-[960px] mx-auto p-4 md:px-8 md:py-8">
         {/* Header */}
         <div className="mb-6">
           <h1 className="font-serif text-[24px] font-semibold text-ink mb-1">Entities</h1>

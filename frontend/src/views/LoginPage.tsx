@@ -41,7 +41,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-cream">
+    <div className="flex items-center justify-center min-h-screen bg-cream px-4">
       <div className="w-full max-w-sm p-8 bg-warm-white rounded-xl border border-border shadow-card">
         {/* Branding */}
         <div className="flex items-center mb-6">

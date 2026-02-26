@@ -27,7 +27,12 @@ function NoteListSkeleton() {
   );
 }
 
-export default function NoteList() {
+interface NoteListProps {
+  /** Called after a note is selected. Used on mobile to navigate to the editor view. */
+  onNoteSelect?: () => void;
+}
+
+export default function NoteList({ onNoteSelect }: NoteListProps = {}) {
   const { sidebarFilter, searchQuery } = useUIStore();
   const { activeNoteId, setActiveNoteId } = useEditorStore();
   const createNote = useCreateNote();
@@ -132,7 +137,7 @@ export default function NoteList() {
   };
 
   return (
-    <div className="flex flex-col w-[260px] shrink-0 bg-panel-bg border-r border-border-light">
+    <div className="flex flex-col w-full md:w-[260px] md:shrink-0 bg-panel-bg border-r border-border-light">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-light">
         <h2 className="font-serif text-[15px] font-semibold text-ink">{title}</h2>
@@ -221,7 +226,10 @@ export default function NoteList() {
               <NoteCard
                 note={note}
                 isActive={note.id === activeNoteId}
-                onClick={() => setActiveNoteId(note.id)}
+                onClick={() => {
+                  setActiveNoteId(note.id);
+                  onNoteSelect?.();
+                }}
                 isTrashView={isTrashView}
               />
             </div>

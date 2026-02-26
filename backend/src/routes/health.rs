@@ -1,16 +1,29 @@
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 
-use crate::error::AppError;
+async fn health_check(State(pool): State<PgPool>) -> (StatusCode, Json<Value>) {
+    let db_ok = sqlx::query("SELECT 1").execute(&pool).await.is_ok();
+    let pool_size = pool.size();
+    let idle = pool.num_idle();
 
-async fn health_check(State(pool): State<PgPool>) -> Result<Json<Value>, AppError> {
-    sqlx::query("SELECT 1")
-        .execute(&pool)
-        .await
-        .map_err(|e| AppError::Internal(format!("Database health check failed: {}", e)))?;
+    let status_code = if db_ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
 
-    Ok(Json(json!({ "status": "ok" })))
+    let body = json!({
+        "status": if db_ok { "ok" } else { "degraded" },
+        "database": if db_ok { "connected" } else { "disconnected" },
+        "pool": {
+            "size": pool_size,
+            "idle": idle,
+        },
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+
+    (status_code, Json(body))
 }
 
 pub fn routes() -> Router<PgPool> {

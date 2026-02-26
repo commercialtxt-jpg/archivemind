@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
+import { cacheInventory, getCachedInventory } from '../lib/offlineDb';
 import type { ApiResponse, InventoryItem } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -21,8 +22,12 @@ export function useInventory() {
     queryFn: async () => {
       try {
         const { data } = await api.get<ApiResponse<InventoryItem[]>>('/inventory');
+        const items = data.data ?? [];
+        cacheInventory(items).catch(() => {});
         return data;
       } catch {
+        const cached = await getCachedInventory();
+        if (cached.length > 0) return { data: cached };
         return { data: [] as InventoryItem[] };
       }
     },
