@@ -25,7 +25,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const { data: counts } = useNoteCounts();
   const [search, setSearch] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // --- Field trips ---
   const { data: fieldTrips } = useFieldTrips();

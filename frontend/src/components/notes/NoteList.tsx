@@ -55,7 +55,7 @@ export default function NoteList({ onNoteSelect }: NoteListProps = {}) {
   }, [menuOpen]);
 
   const filters = useMemo(() => {
-    const f: Record<string, string | boolean> = {};
+    const f: Record<string, string | boolean | number> = {};
     switch (sidebarFilter.type) {
       case 'starred':
         f.starred = true;

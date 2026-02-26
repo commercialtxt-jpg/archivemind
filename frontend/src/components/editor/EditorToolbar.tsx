@@ -5,7 +5,7 @@ import { useOfflineStore } from '../../stores/offlineStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useUploadMedia } from '../../hooks/useMedia';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
-import { useSummarize, useAiStatus } from '../../hooks/useAI';
+import { useSummarize } from '../../hooks/useAI';
 import { useUsage } from '../../hooks/useUsage';
 import UpgradePrompt from '../shared/UpgradePrompt';
 
@@ -36,7 +36,6 @@ export default function EditorToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isRecording, startRecording, stopRecording } = useAudioRecorder();
   const summarize = useSummarize();
-  const { data: aiStatus } = useAiStatus();
   const { data: usage } = useUsage();
   const [summary, setSummary] = useState<string | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
