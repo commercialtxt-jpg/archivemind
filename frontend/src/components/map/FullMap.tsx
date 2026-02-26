@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import { useNavigate } from 'react-router-dom';
 import { useMapLocations } from '../../hooks/useMap';
 import { useEditorStore } from '../../stores/editorStore';
+import { useUIStore } from '../../stores/uiStore';
 import { useUpdateNote } from '../../hooks/useNotes';
 import type { MapLocation } from '../../types';
 
@@ -71,6 +72,8 @@ export default function FullMap() {
   const navigate = useNavigate();
   const activeNoteId = useEditorStore((s) => s.activeNoteId);
   const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
+  const mapFlyTo = useUIStore((s) => s.mapFlyTo);
+  const setMapFlyTo = useUIStore((s) => s.setMapFlyTo);
   const updateNote = useUpdateNote();
 
   const [filter, setFilter] = useState<FilterType>('all');
@@ -94,8 +97,10 @@ export default function FullMap() {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const container = containerRef.current;
+
     const map = new mapboxgl.Map({
-      container: containerRef.current,
+      container,
       style: 'mapbox://styles/mapbox/outdoors-v12',
       center: [80.6, 7.5],
       zoom: 7,
@@ -104,16 +109,43 @@ export default function FullMap() {
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
+      // Force a resize so the map fills its container correctly when the
+      // component was mounted during a layout transition (e.g. navigating
+      // from Journal where the sidebar was visible, changing <main> width).
+      map.resize();
       setMapReady(true);
     });
+
+    // Also resize whenever the container element itself changes size — this
+    // covers the case where the sidebar collapses/expands after the map is
+    // already initialised.
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) mapRef.current.resize();
+    });
+    resizeObserver.observe(container);
 
     mapRef.current = map;
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  // ── Fly to a requested location (e.g. from location chip click) ──────────
+
+  useEffect(() => {
+    if (!mapReady || !mapFlyTo || !mapRef.current) return;
+    mapRef.current.flyTo({
+      center: [mapFlyTo.lng, mapFlyTo.lat],
+      zoom: 13,
+      duration: 1200,
+      essential: true,
+    });
+    // Consume the fly-to target so repeated renders don't re-trigger.
+    setMapFlyTo(null);
+  }, [mapReady, mapFlyTo, setMapFlyTo]);
 
   // ── Place / refresh markers when data or filter changes ───────────────────
 
@@ -291,7 +323,7 @@ export default function FullMap() {
       )}
 
       {/* Map container */}
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
       {/* Click-to-add banner */}
       {activeNoteId && (

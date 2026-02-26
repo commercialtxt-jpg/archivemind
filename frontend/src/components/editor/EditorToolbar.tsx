@@ -4,6 +4,7 @@ import type { Editor } from '@tiptap/react';
 import { useOfflineStore } from '../../stores/offlineStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useUploadMedia } from '../../hooks/useMedia';
+import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -30,8 +31,7 @@ export default function EditorToolbar({
   const [toast, setToast] = useState<string | null>(null);
   const uploadMedia = useUploadMedia();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const { isRecording, startRecording, stopRecording } = useAudioRecorder();
 
   // Listen for FAB record button event
   useEffect(() => {
@@ -104,59 +104,28 @@ export default function EditorToolbar({
     }
 
     if (isRecording) {
-      // Stop recording
-      mediaRecorderRef.current?.stop();
+      const file = await stopRecording();
+      if (!file) {
+        showToast('Recording too large (max 50 MB)');
+        return;
+      }
+      onRecordingStop?.(new Blob([file], { type: file.type }));
+      showToast('Uploading recording...');
+      try {
+        await uploadMedia.mutateAsync({ file, noteId: note.id, mediaType: 'audio' });
+        showToast('Recording saved');
+      } catch {
+        showToast('Upload failed — recording lost');
+      }
       return;
     }
 
-    // Start recording
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
-      const chunks: BlobPart[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setIsRecording(false);
-
-        const mimeType = recorder.mimeType || 'audio/webm';
-        const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
-        const audioBlob = new Blob(chunks, { type: mimeType });
-
-        // Notify parent (for UI indicator)
-        onRecordingStop?.(audioBlob);
-
-        // Upload
-        const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
-        if (audioBlob.size > MAX_AUDIO_BYTES) {
-          showToast('Recording too large (max 50 MB)');
-          return;
-        }
-
-        const filename = `recording-${Date.now()}.${ext}`;
-        const file = new File([audioBlob], filename, { type: mimeType });
-
-        showToast('Uploading recording...');
-        try {
-          await uploadMedia.mutateAsync({ file, noteId: note!.id, mediaType: 'audio' });
-          showToast('Recording saved');
-        } catch {
-          showToast('Upload failed — recording lost');
-        }
-      };
-
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-      onRecordingStart?.();
-    } catch (err) {
+    const ok = await startRecording();
+    if (!ok) {
       showToast('Microphone access denied');
-      console.error(err);
+      return;
     }
+    onRecordingStart?.();
   };
 
   return (
@@ -268,17 +237,6 @@ export default function EditorToolbar({
       )}
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helper: pick the best supported audio MIME type
-// ---------------------------------------------------------------------------
-function getSupportedMimeType(): string {
-  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-  for (const t of types) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return '';
 }
 
 // ---------------------------------------------------------------------------

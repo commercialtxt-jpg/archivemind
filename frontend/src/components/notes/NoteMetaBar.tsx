@@ -3,6 +3,17 @@ import { useUIStore } from '../../stores/uiStore';
 import { useNoteEntities } from '../../hooks/useEntities';
 import type { Note } from '../../types';
 
+// Parse "lat,lng" GPS coords string into a number pair, or null if invalid.
+function parseGpsCoords(gps: string | null | undefined): { lat: number; lng: number } | null {
+  if (!gps) return null;
+  const parts = gps.split(',');
+  if (parts.length !== 2) return null;
+  const lat = parseFloat(parts[0]);
+  const lng = parseFloat(parts[1]);
+  if (isNaN(lat) || isNaN(lng)) return null;
+  return { lat, lng };
+}
+
 interface NoteMetaBarProps {
   note: Note;
 }
@@ -10,6 +21,7 @@ interface NoteMetaBarProps {
 export default function NoteMetaBar({ note }: NoteMetaBarProps) {
   const navigate = useNavigate();
   const setSelectedEntityId = useUIStore((s) => s.setSelectedEntityId);
+  const setMapFlyTo = useUIStore((s) => s.setMapFlyTo);
   const { data: noteEntities } = useNoteEntities(note.id);
 
   const handleEntityClick = (entityId: string) => {
@@ -93,7 +105,14 @@ export default function NoteMetaBar({ note }: NoteMetaBarProps) {
           return (
             <button
               key={i}
-              onClick={() => navigate('/map')}
+              onClick={() => {
+                // Store the note's GPS coordinates so FullMap can fly to them.
+                const coords = parseGpsCoords(note.gps_coords);
+                if (coords) {
+                  setMapFlyTo({ ...coords, label: note.location_name ?? undefined });
+                }
+                navigate('/map');
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1 text-[11.5px] rounded-full
                 bg-parchment border border-border-light text-ink-muted
                 hover:border-coral hover:text-coral transition-all cursor-pointer"

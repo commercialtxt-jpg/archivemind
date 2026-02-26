@@ -4,9 +4,10 @@ import { useEditorStore } from '../../stores/editorStore';
 interface FABProps {
   onNewNote: () => void;
   isCreating?: boolean;
+  onQuickCapture?: () => void;
 }
 
-export default function FAB({ onNewNote, isCreating }: FABProps) {
+export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps) {
   const activeNoteId = useEditorStore((s) => s.activeNoteId);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -36,6 +37,19 @@ export default function FAB({ onNewNote, isCreating }: FABProps) {
         </div>
       )}
 
+      {onQuickCapture && (
+        <button
+          onClick={onQuickCapture}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-3xl
+            bg-sage text-white text-[13px] font-semibold
+            shadow-fab hover:shadow-fab-hover hover:-translate-y-0.5
+            transition-all cursor-pointer"
+          title="Quick field capture"
+        >
+          <span className="text-[14px]">📍</span>
+          Capture
+        </button>
+      )}
       <button
         onClick={handleRecord}
         className="flex items-center gap-1.5 px-4 py-2.5 rounded-3xl

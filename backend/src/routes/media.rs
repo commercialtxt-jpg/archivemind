@@ -133,7 +133,6 @@ async fn upload_media(
 // GET /api/v1/media/:id/file — serve the file (supports Range for audio)
 // ---------------------------------------------------------------------------
 async fn serve_file(
-    _auth: AuthUser,
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
     headers: HeaderMap,
@@ -148,6 +147,15 @@ async fn serve_file(
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Media not found".to_string()))?;
+
+    // If s3_key is an external URL (e.g. seed placeholder images), redirect to it
+    if record.s3_key.starts_with("http://") || record.s3_key.starts_with("https://") {
+        let mut redirect_headers = HeaderMap::new();
+        if let Ok(loc) = HeaderValue::from_str(&record.s3_key) {
+            redirect_headers.insert(header::LOCATION, loc);
+        }
+        return Ok((StatusCode::TEMPORARY_REDIRECT, redirect_headers, Body::empty()));
+    }
 
     let file_path = PathBuf::from(UPLOADS_DIR).join(&record.s3_key);
 

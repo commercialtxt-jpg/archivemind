@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import Underline from '@tiptap/extension-underline';
 import { EntityMention, ConceptTag, LocationTag } from '../../lib/tiptap';
 import { useNote, useUpdateNote, useToggleStar } from '../../hooks/useNotes';
 import { useMedia } from '../../hooks/useMedia';
@@ -53,11 +52,11 @@ export default function NoteEditor() {
   const extensions = useMemo(() => [
     StarterKit.configure({
       heading: { levels: [1, 2] },
+      // StarterKit v3 bundles Underline — no need to add it separately.
     }),
     Placeholder.configure({
       placeholder: 'Start writing your field notes...',
     }),
-    Underline,
     EntityMention,
     ConceptTag,
     LocationTag,

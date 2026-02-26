@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import NoteList from '../components/notes/NoteList';
 import NoteEditor from '../components/notes/NoteEditor';
 import EntityPanel from '../components/entity/EntityPanel';
 import FAB from '../components/ui/FAB';
+import QuickCaptureModal from '../components/ui/QuickCaptureModal';
 import { useCreateNote } from '../hooks/useNotes';
 import { useEditorStore } from '../stores/editorStore';
 
 export default function JournalView() {
   const createNote = useCreateNote();
   const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
 
   const handleNewNote = () => {
     createNote.mutate(
@@ -27,7 +30,19 @@ export default function JournalView() {
         <NoteEditor />
       </div>
       <EntityPanel />
-      <FAB onNewNote={handleNewNote} isCreating={createNote.isPending} />
+      <FAB
+        onNewNote={handleNewNote}
+        isCreating={createNote.isPending}
+        onQuickCapture={() => setQuickCaptureOpen(true)}
+      />
+      <QuickCaptureModal
+        open={quickCaptureOpen}
+        onClose={() => setQuickCaptureOpen(false)}
+        onCaptured={(noteId) => {
+          setQuickCaptureOpen(false);
+          setActiveNoteId(noteId);
+        }}
+      />
     </div>
   );
 }
