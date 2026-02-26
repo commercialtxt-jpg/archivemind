@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
+use crate::models::entity::Entity;
 use crate::models::note::*;
 use crate::response::ApiResponse;
 
@@ -440,9 +441,7 @@ async fn create_note(
     State(pool): State<PgPool>,
     Json(body): Json<CreateNote>,
 ) -> Result<Json<ApiResponse<Note>>, AppError> {
-    if body.title.is_empty() {
-        return Err(AppError::BadRequest("Title is required".to_string()));
-    }
+    let title = if body.title.is_empty() { "Untitled".to_string() } else { body.title.clone() };
 
     let mut tx = pool
         .begin()
@@ -459,7 +458,7 @@ async fn create_note(
          time_start, time_end, created_at, updated_at, deleted_at",
     )
     .bind(auth.workspace_id)
-    .bind(&body.title)
+    .bind(&title)
     .bind(&body.body)
     .bind(&body.body_text)
     .bind(&body.note_type)
@@ -815,6 +814,28 @@ async fn permanent_delete_note(
     ))
 }
 
+async fn note_entities_list(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiResponse<Vec<Entity>>>, AppError> {
+    let entities = sqlx::query_as::<_, Entity>(
+        "SELECT e.id, e.workspace_id, e.name, e.entity_type::text AS entity_type, \
+         e.role, e.avatar_initials, e.created_at, e.updated_at \
+         FROM entities e \
+         JOIN note_entities ne ON ne.entity_id = e.id \
+         WHERE ne.note_id = $1 AND e.workspace_id = $2 \
+         ORDER BY ne.mention_count DESC NULLS LAST, e.name ASC",
+    )
+    .bind(id)
+    .bind(auth.workspace_id)
+    .fetch_all(&pool)
+    .await?;
+
+    let total = entities.len() as i64;
+    Ok(ApiResponse::list(entities, total, 1, total.max(1)))
+}
+
 pub fn routes() -> Router<PgPool> {
     Router::new()
         .route("/api/v1/notes", get(list_notes).post(create_note))
@@ -824,6 +845,7 @@ pub fn routes() -> Router<PgPool> {
         )
         .route("/api/v1/notes/{id}/star", post(toggle_star))
         .route("/api/v1/notes/{id}/connections", get(note_connections))
+        .route("/api/v1/notes/{id}/entities", get(note_entities_list))
         .route("/api/v1/notes/{id}/restore", post(restore_note))
         .route(
             "/api/v1/notes/{id}/permanent",

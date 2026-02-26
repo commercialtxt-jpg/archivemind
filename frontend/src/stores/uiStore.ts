@@ -32,5 +32,6 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarFilter: (filter) => set({ sidebarFilter: filter }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   toggleEntityPanel: () => set((s) => ({ entityPanelOpen: !s.entityPanelOpen })),
-  setSelectedEntityId: (id) => set({ selectedEntityId: id, entityPanelOpen: !!id }),
+  // Keep panel open regardless; when deselecting, panel stays open showing the browser list
+  setSelectedEntityId: (id) => set((s) => ({ selectedEntityId: id, entityPanelOpen: id ? true : s.entityPanelOpen })),
 }));

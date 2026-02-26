@@ -1,40 +1,37 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useNoteCounts } from '../../hooks/useNotes';
+import { useFieldTrips, useCreateFieldTrip, useDeleteFieldTrip } from '../../hooks/useFieldTrips';
+import { useConcepts, useCreateConcept, useDeleteConcept } from '../../hooks/useConcepts';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
-import type { ApiResponse, FieldTrip, Concept, Entity } from '../../types';
+import type { ApiResponse, Entity } from '../../types';
 import SyncStatus from '../ui/SyncStatus';
 
 export default function Sidebar() {
+  const navigate = useNavigate();
   const { sidebarFilter, setSidebarFilter, setSearchQuery } = useUIStore();
   const { data: counts } = useNoteCounts();
   const [search, setSearch] = useState('');
 
-  const { data: fieldTripsResp } = useQuery({
-    queryKey: ['field-trips'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiResponse<FieldTrip[]>>('/field-trips');
-        return data.data ?? [];
-      } catch {
-        return [] as FieldTrip[];
-      }
-    },
-  });
+  // --- Field trips ---
+  const { data: fieldTrips } = useFieldTrips();
+  const createFieldTrip = useCreateFieldTrip();
+  const deleteFieldTrip = useDeleteFieldTrip();
+  const [ftFormOpen, setFtFormOpen] = useState(false);
+  const [ftName, setFtName] = useState('');
+  const ftInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: conceptsResp } = useQuery({
-    queryKey: ['concepts'],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<ApiResponse<Concept[]>>('/concepts');
-        return data.data ?? [];
-      } catch {
-        return [] as Concept[];
-      }
-    },
-  });
+  // --- Concepts ---
+  const { data: concepts } = useConcepts();
+  const createConcept = useCreateConcept();
+  const deleteConcept = useDeleteConcept();
+  const [conceptFormOpen, setConceptFormOpen] = useState(false);
+  const [conceptName, setConceptName] = useState('');
+  const conceptInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Entity type counts ---
   const { data: personCount } = useQuery({
     queryKey: ['entities', 'person', 'count'],
     queryFn: async () => {
@@ -82,6 +79,32 @@ export default function Sidebar() {
 
   const isActive = (type: string, id?: string) =>
     sidebarFilter.type === type && sidebarFilter.id === id;
+
+  // Field trip form submit
+  const handleFtSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = ftName.trim();
+    if (!name) return;
+    createFieldTrip.mutate({ name, icon: '📍' });
+    setFtName('');
+    setFtFormOpen(false);
+  };
+
+  // Concept form submit
+  const handleConceptSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = conceptName.trim();
+    if (!name) return;
+    createConcept.mutate({ name, icon: '🏷' });
+    setConceptName('');
+    setConceptFormOpen(false);
+  };
+
+  // Entity type item click — navigate to entities view filtered by type
+  const handleEntityTypeClick = (type: string, label: string) => {
+    setSidebarFilter({ type: 'entity_type', id: type, label });
+    navigate('/entities');
+  };
 
   return (
     <aside className="flex flex-col w-60 shrink-0 bg-sidebar-bg border-r border-border-light overflow-hidden">
@@ -133,35 +156,133 @@ export default function Sidebar() {
 
         {/* Field Trips */}
         <section>
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted px-2 mb-2">
-            Field Trips
-          </h3>
-          {fieldTripsResp?.map((ft) => (
-            <SidebarItem
+          <div className="flex items-center justify-between px-2 mb-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+              Field Trips
+            </h3>
+            <button
+              onClick={() => {
+                setFtFormOpen((o) => !o);
+                setTimeout(() => ftInputRef.current?.focus(), 50);
+              }}
+              className="w-4 h-4 flex items-center justify-center rounded text-ink-muted hover:text-coral hover:bg-glow-coral transition-all cursor-pointer text-[14px] leading-none"
+              title="New field trip"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Inline create form */}
+          {ftFormOpen && (
+            <form onSubmit={handleFtSubmit} className="px-2 mb-2">
+              <div className="flex gap-1">
+                <input
+                  ref={ftInputRef}
+                  value={ftName}
+                  onChange={(e) => setFtName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Escape' && setFtFormOpen(false)}
+                  placeholder="Trip name..."
+                  className="flex-1 text-[12px] px-2 py-1 bg-white border border-border rounded-md
+                    focus:border-coral outline-none transition-colors"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!ftName.trim() || createFieldTrip.isPending}
+                  className="px-2 py-1 text-[11px] bg-coral text-white rounded-md font-medium
+                    disabled:opacity-50 cursor-pointer hover:bg-coral/90 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
+
+          {fieldTrips?.map((ft) => (
+            <SidebarItemWithDelete
               key={ft.id}
               icon={ft.icon} label={ft.name} count={ft.note_count}
               active={isActive('field_trip', ft.id)}
               onClick={() => setSidebarFilter({ type: 'field_trip', id: ft.id, label: ft.name })}
+              onDelete={() => {
+                deleteFieldTrip.mutate(ft.id);
+                if (sidebarFilter.type === 'field_trip' && sidebarFilter.id === ft.id) {
+                  setSidebarFilter({ type: 'all' });
+                }
+              }}
             />
           ))}
+
+          {(!fieldTrips || fieldTrips.length === 0) && !ftFormOpen && (
+            <p className="px-2 text-[11.5px] text-ink-ghost italic">No field trips yet</p>
+          )}
         </section>
 
         {/* Concepts */}
         <section>
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted px-2 mb-2">
-            Concepts
-          </h3>
-          {conceptsResp?.map((c) => (
-            <SidebarItem
+          <div className="flex items-center justify-between px-2 mb-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+              Concepts
+            </h3>
+            <button
+              onClick={() => {
+                setConceptFormOpen((o) => !o);
+                setTimeout(() => conceptInputRef.current?.focus(), 50);
+              }}
+              className="w-4 h-4 flex items-center justify-center rounded text-ink-muted hover:text-coral hover:bg-glow-coral transition-all cursor-pointer text-[14px] leading-none"
+              title="New concept"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Inline create form */}
+          {conceptFormOpen && (
+            <form onSubmit={handleConceptSubmit} className="px-2 mb-2">
+              <div className="flex gap-1">
+                <input
+                  ref={conceptInputRef}
+                  value={conceptName}
+                  onChange={(e) => setConceptName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Escape' && setConceptFormOpen(false)}
+                  placeholder="Concept name..."
+                  className="flex-1 text-[12px] px-2 py-1 bg-white border border-border rounded-md
+                    focus:border-coral outline-none transition-colors"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!conceptName.trim() || createConcept.isPending}
+                  className="px-2 py-1 text-[11px] bg-coral text-white rounded-md font-medium
+                    disabled:opacity-50 cursor-pointer hover:bg-coral/90 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
+
+          {concepts?.map((c) => (
+            <SidebarItemWithDelete
               key={c.id}
               icon={c.icon} label={c.name} count={c.note_count}
               active={isActive('concept', c.id)}
               onClick={() => setSidebarFilter({ type: 'concept', id: c.id, label: c.name })}
+              onDelete={() => {
+                deleteConcept.mutate(c.id);
+                if (sidebarFilter.type === 'concept' && sidebarFilter.id === c.id) {
+                  setSidebarFilter({ type: 'all' });
+                }
+              }}
             />
           ))}
+
+          {(!concepts || concepts.length === 0) && !conceptFormOpen && (
+            <p className="px-2 text-[11.5px] text-ink-ghost italic">No concepts yet</p>
+          )}
         </section>
 
-        {/* Entity Types */}
+        {/* Entity Types — fixed categories, navigate to entities view */}
         <section>
           <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted px-2 mb-2">
             Entity Types
@@ -169,17 +290,17 @@ export default function Sidebar() {
           <SidebarItem
             icon="🧑" label="Interviewees" count={personCount}
             active={isActive('entity_type', 'person')}
-            onClick={() => setSidebarFilter({ type: 'entity_type', id: 'person', label: 'Interviewees' })}
+            onClick={() => handleEntityTypeClick('person', 'Interviewees')}
           />
           <SidebarItem
             icon="📍" label="Locations" count={locationCount}
             active={isActive('entity_type', 'location')}
-            onClick={() => setSidebarFilter({ type: 'entity_type', id: 'location', label: 'Locations' })}
+            onClick={() => handleEntityTypeClick('location', 'Locations')}
           />
           <SidebarItem
             icon="🏺" label="Artifacts" count={artifactCount}
             active={isActive('entity_type', 'artifact')}
-            onClick={() => setSidebarFilter({ type: 'entity_type', id: 'artifact', label: 'Artifacts' })}
+            onClick={() => handleEntityTypeClick('artifact', 'Artifacts')}
           />
         </section>
       </div>
@@ -191,6 +312,10 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function SidebarItem({
   icon,
@@ -228,5 +353,68 @@ function SidebarItem({
         </span>
       )}
     </button>
+  );
+}
+
+function SidebarItemWithDelete({
+  icon,
+  label,
+  count,
+  active,
+  onClick,
+  onDelete,
+}: {
+  icon: string;
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+  onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      className="relative group"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onClick}
+        className={`
+          flex items-center w-full gap-2 px-2 py-[7px] rounded-lg text-[13px] transition-all duration-150 cursor-pointer pr-7
+          ${active
+            ? 'bg-white text-ink font-medium shadow-sidebar-active'
+            : 'text-ink-mid hover:bg-white/60'
+          }
+        `}
+      >
+        <span className="w-5 text-center text-sm text-coral">{icon}</span>
+        <span className="flex-1 text-left truncate">{label}</span>
+        {count !== undefined && count > 0 && (
+          <span
+            className={`text-[11px] px-1.5 py-0.5 rounded-full min-w-[20px] text-center
+              ${active ? 'bg-glow-coral text-coral' : 'bg-sand text-ink-ghost'}
+            `}
+          >
+            {count}
+          </span>
+        )}
+      </button>
+      {/* Delete button — visible on hover */}
+      {hovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+            rounded text-ink-ghost hover:text-coral hover:bg-coral/10 transition-all cursor-pointer text-[11px]"
+          title="Delete"
+        >
+          ✕
+        </button>
+      )}
+    </div>
   );
 }

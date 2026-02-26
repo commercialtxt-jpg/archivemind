@@ -11,7 +11,7 @@ export default function JournalView() {
 
   const handleNewNote = () => {
     createNote.mutate(
-      { title: '', note_type: 'field_note' } as never,
+      { title: 'Untitled', note_type: 'field_note' } as never,
       {
         onSuccess: (note) => {
           if (note?.id) setActiveNoteId(note.id);
@@ -27,7 +27,7 @@ export default function JournalView() {
         <NoteEditor />
       </div>
       <EntityPanel />
-      <FAB onNewNote={handleNewNote} />
+      <FAB onNewNote={handleNewNote} isCreating={createNote.isPending} />
     </div>
   );
 }

@@ -1,31 +1,15 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../lib/api';
-import type { ApiResponse, Routine } from '../../types';
+import { useRoutines, useStartRoutine } from '../../hooks/useRoutines';
 
 export default function RoutineBanner() {
-  const queryClient = useQueryClient();
+  const { data: routinesRes } = useRoutines();
+  const startRoutine = useStartRoutine();
 
-  const { data: routines } = useQuery({
-    queryKey: ['routines'],
-    queryFn: async () => {
-      const { data } = await api.get<ApiResponse<Routine[]>>('/routines');
-      return data.data;
-    },
-  });
+  // useRoutines returns ApiResponse<Routine[]> — extract the inner array safely
+  const routines = Array.isArray(routinesRes?.data) ? routinesRes.data : [];
 
-  const startRoutine = useMutation({
-    mutationFn: async (id: string) => {
-      const { data } = await api.post<ApiResponse<Routine>>(`/routines/${id}/start`);
-      return data.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routines'] });
-    },
-  });
+  const activeRoutine = routines.find((r) => r.is_active);
 
-  const activeRoutine = routines?.find((r) => r.is_active);
-
-  if (!routines?.length) return null;
+  if (!routines.length) return null;
 
   // If there's an active routine, show it
   if (activeRoutine) {

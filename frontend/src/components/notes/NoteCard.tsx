@@ -2,7 +2,8 @@ import { useState } from 'react';
 import NoteTypeBadge from './NoteTypeBadge';
 import HighlightText from '../ui/HighlightText';
 import { useUIStore } from '../../stores/uiStore';
-import { useToggleStar, useRestoreNote, usePermanentDeleteNote } from '../../hooks/useNotes';
+import { useEditorStore } from '../../stores/editorStore';
+import { useToggleStar, useDeleteNote, useRestoreNote, usePermanentDeleteNote } from '../../hooks/useNotes';
 import type { NoteSummary } from '../../types';
 
 interface NoteCardProps {
@@ -14,16 +15,29 @@ interface NoteCardProps {
 
 export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteCardProps) {
   const searchQuery = useUIStore((s) => s.searchQuery);
+  const activeNoteId = useEditorStore((s) => s.activeNoteId);
+  const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
   const toggleStar = useToggleStar();
+  const deleteNote = useDeleteNote();
   const restoreNote = useRestoreNote();
   const permanentDelete = usePermanentDeleteNote();
   const [starBouncing, setStarBouncing] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setStarBouncing(true);
     toggleStar.mutate(note.id);
     setTimeout(() => setStarBouncing(false), 350);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteNote.mutate(note.id);
+    // Clear editor if this was the active note
+    if (activeNoteId === note.id) {
+      setActiveNoteId(null);
+    }
   };
 
   return (
@@ -34,8 +48,10 @@ export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteC
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={`
-        w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] cursor-pointer note-card-lift
+        relative w-full text-left p-3 rounded-[10px] mb-1 border-[1.5px] cursor-pointer note-card-lift
         ${isActive
           ? 'bg-card-bg border-border shadow-card-active'
           : 'bg-transparent border-transparent hover:bg-white/70'
@@ -43,10 +59,27 @@ export default function NoteCard({ note, isActive, onClick, isTrashView }: NoteC
       `}
     >
       {/* Title + badge row */}
-      <div className="flex items-start gap-2 mb-1">
-        <h3 className="flex-1 font-serif text-[13.5px] font-medium leading-[1.3] text-ink line-clamp-2">
+      <div className="flex items-start gap-1.5 mb-1">
+        <h3 className="flex-1 font-serif text-[13.5px] font-medium leading-[1.3] text-ink line-clamp-2 min-w-0">
           <HighlightText text={note.title || 'Untitled'} query={searchQuery} />
         </h3>
+        {/* Delete — minimal icon, visible on hover */}
+        {!isTrashView && hovered && (
+          <button
+            onClick={handleDeleteClick}
+            disabled={deleteNote.isPending}
+            className="w-5 h-5 flex-shrink-0 flex items-center justify-center
+              rounded text-ink-ghost/60 hover:text-coral hover:bg-coral/10
+              transition-all cursor-pointer z-10 disabled:opacity-50"
+            title="Move to trash"
+            aria-label="Delete note"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 0 1 1.34-1.34h2.66a1.33 1.33 0 0 1 1.34 1.34V4M6.67 7.33v4M9.33 7.33v4" />
+              <path d="M3.33 4h9.34l-.67 9.33a1.33 1.33 0 0 1-1.33 1.34H5.33A1.33 1.33 0 0 1 4 13.33L3.33 4Z" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={handleStarClick}
           className={`text-[13px] flex-shrink-0 cursor-pointer transition-colors ${

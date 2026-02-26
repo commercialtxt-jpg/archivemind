@@ -1,17 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import mapboxgl from 'mapbox-gl';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { useEntity, useEntityTopics, useEntityNotes } from '../../hooks/useEntities';
+import { useEntities, useEntity, useEntityTopics, useEntityNotes } from '../../hooks/useEntities';
 import { useInventory, useUpdateInventoryItem } from '../../hooks/useInventory';
 import { useMapLocations } from '../../hooks/useMap';
-import type { InventoryItem, NoteSummary } from '../../types';
+import type { Entity, InventoryItem, NoteSummary, MapLocation } from '../../types';
+
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
 
 type Tab = 'entity' | 'linked' | 'map' | 'gear';
+
+// ---------------------------------------------------------------------------
+// Root panel
+// ---------------------------------------------------------------------------
 
 export default function EntityPanel() {
   const { entityPanelOpen, toggleEntityPanel } = useUIStore();
   const [activeTab, setActiveTab] = useState<Tab>('entity');
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { selectedEntityId, setSelectedEntityId } = useUIStore();
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (overflowRef.current && overflowRef.current.contains(e.target as Node)) return;
+      setOverflowOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [overflowOpen]);
 
   if (!entityPanelOpen) {
     return (
@@ -28,7 +50,6 @@ export default function EntityPanel() {
         >
           ↙
         </span>
-
         {/* Vertical label */}
         <span
           className="text-[9.5px] font-semibold text-ink-ghost group-hover:text-ink-muted uppercase tracking-[0.12em] transition-colors select-none"
@@ -53,9 +74,47 @@ export default function EntityPanel() {
           >
             ↗
           </button>
-          <button className="w-6 h-6 flex items-center justify-center text-ink-muted hover:text-ink rounded transition-colors text-[13px]">
-            ⋮
-          </button>
+          {/* Overflow menu */}
+          <div className="relative" ref={overflowRef}>
+            <button
+              onClick={() => setOverflowOpen((o) => !o)}
+              className="w-6 h-6 flex items-center justify-center text-ink-muted hover:text-ink hover:bg-sand rounded transition-colors text-[13px] cursor-pointer"
+              title="More options"
+              aria-haspopup="true"
+              aria-expanded={overflowOpen}
+            >
+              ⋮
+            </button>
+            {overflowOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg border border-border shadow-lg z-50 py-1 overflow-hidden"
+                role="menu"
+              >
+                <button
+                  onClick={() => {
+                    navigate('/entities');
+                    setOverflowOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-[12px] text-ink hover:bg-parchment transition-colors cursor-pointer"
+                  role="menuitem"
+                >
+                  View all entities
+                </button>
+                {selectedEntityId && (
+                  <button
+                    onClick={() => {
+                      setSelectedEntityId(null);
+                      setOverflowOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-[12px] text-ink hover:bg-parchment transition-colors cursor-pointer"
+                    role="menuitem"
+                  >
+                    Deselect entity
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -107,11 +166,88 @@ function TabBar({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: T
 }
 
 // ---------------------------------------------------------------------------
+// Entity browser (shown when no entity is selected)
+// ---------------------------------------------------------------------------
+
+function EntityBrowser() {
+  const { setSelectedEntityId } = useUIStore();
+  const { data: entitiesRes, isLoading } = useEntities();
+  const entities = entitiesRes?.data ?? [];
+
+  const entityTypeIcon = (type: string) => {
+    if (type === 'person') return '👤';
+    if (type === 'location') return '📍';
+    if (type === 'artifact') return '🔮';
+    return '🔘';
+  };
+
+  const entityTypeColor = (type: string) => {
+    if (type === 'person') return 'var(--color-coral)';
+    if (type === 'location') return 'var(--color-sage)';
+    return 'var(--color-amber)';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm">
+        <div className="w-5 h-5 border-2 border-coral/30 border-t-coral rounded-full animate-spin mb-2" />
+        Loading entities...
+      </div>
+    );
+  }
+
+  if (entities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center gap-2">
+        <span className="text-3xl">👤</span>
+        <p className="leading-snug">No entities yet. Mention people, places, or artifacts in your notes to create entities.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-4 space-y-1.5">
+      <p className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-2 mt-1">
+        All Entities — click to view
+      </p>
+      {entities.map((entity: Entity) => (
+        <button
+          key={entity.id}
+          onClick={() => setSelectedEntityId(entity.id)}
+          className="w-full text-left flex items-center gap-2.5 p-2.5 rounded-lg bg-white border border-border-light hover:border-coral/30 hover:shadow-sm transition-all cursor-pointer group"
+        >
+          {/* Avatar */}
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-serif font-semibold flex-shrink-0"
+            style={{ background: `linear-gradient(135deg, ${entityTypeColor(entity.entity_type)}, ${entityTypeColor(entity.entity_type)}99)` }}
+          >
+            {entity.avatar_initials || entity.name.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-serif font-medium text-ink leading-tight group-hover:text-coral transition-colors">
+              {entity.name}
+            </p>
+            <p className="text-[10.5px] text-ink-ghost mt-0.5 flex items-center gap-1">
+              <span>{entityTypeIcon(entity.entity_type)}</span>
+              <span className="capitalize">{entity.entity_type}</span>
+              {entity.role && <span className="text-ink-ghost">· {entity.role}</span>}
+            </p>
+          </div>
+          <span className="text-[10px] text-ink-ghost opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Entity Tab
 // ---------------------------------------------------------------------------
 
 function EntityTab() {
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const { setSelectedEntityId } = useUIStore();
+  const navigate = useNavigate();
   const { data: entity, isLoading: entityLoading } = useEntity(selectedEntityId);
   const { data: topics, isLoading: topicsLoading } = useEntityTopics(selectedEntityId);
   const { data: entityNotes } = useEntityNotes(selectedEntityId);
@@ -124,14 +260,9 @@ function EntityTab() {
   const readyCount = inventory.filter((i) => !badStatuses.includes(i.status)).length;
   const totalCount = inventory.length;
 
-  // No entity selected
+  // No entity selected — show the entity browser
   if (!selectedEntityId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
-        <span className="text-2xl mb-2">👤</span>
-        Select an entity to view details
-      </div>
-    );
+    return <EntityBrowser />;
   }
 
   // Loading state
@@ -147,28 +278,44 @@ function EntityTab() {
   // Entity not found
   if (!entity) {
     return (
-      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
-        <span className="text-2xl mb-2">🔍</span>
-        Entity not found
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center gap-2">
+        <span className="text-2xl">🔍</span>
+        <p>Entity not found.</p>
+        <button
+          onClick={() => setSelectedEntityId(null)}
+          className="text-[11px] text-coral hover:underline cursor-pointer mt-1"
+        >
+          Back to entity list
+        </button>
       </div>
     );
   }
 
   return (
     <div className="px-3 pb-4 space-y-3">
+      {/* ── Back link ── */}
+      <button
+        onClick={() => setSelectedEntityId(null)}
+        className="flex items-center gap-1 text-[10.5px] text-ink-muted hover:text-coral transition-colors cursor-pointer mt-1"
+      >
+        <span>←</span>
+        <span>All entities</span>
+      </button>
+
       {/* ── Avatar + name + role ── */}
       <div className="bg-white p-3.5 rounded-[10px] border border-border-light shadow-[0_1px_3px_rgba(0,0,0,.04)] flex items-center gap-3">
         <div
           className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-serif font-semibold flex-shrink-0"
           style={{ background: 'linear-gradient(135deg, var(--color-coral), var(--color-amber))' }}
         >
-          {entity.avatar_initials}
+          {entity.avatar_initials || entity.name.slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0">
           <h3 className="font-serif font-semibold text-[14px] text-ink leading-tight">{entity.name}</h3>
           {entity.role && (
             <p className="text-[11.5px] text-ink-muted leading-tight mt-0.5">{entity.role}</p>
           )}
+          <p className="text-[10px] text-ink-ghost mt-0.5 capitalize">{entity.entity_type}</p>
         </div>
       </div>
 
@@ -199,7 +346,7 @@ function EntityTab() {
       )}
 
       {/* ── Location mini-map ── */}
-      <EntityTabMiniMap entityId={selectedEntityId} entityNotes={entityNotes} />
+      <EntityTabMiniMap entityId={selectedEntityId} entityNotes={entityNotes} onExpand={() => navigate('/map')} />
 
       {/* ── Inventory alert ── */}
       {needsAttention.length > 0 && (
@@ -255,6 +402,12 @@ function EntityTab() {
           </div>
         </div>
       )}
+
+      {entityNotes && entityNotes.length === 0 && topics && topics.length === 0 && (
+        <p className="text-[11px] text-ink-ghost text-center py-4">
+          No notes or topics linked to this entity yet.
+        </p>
+      )}
     </div>
   );
 }
@@ -270,9 +423,9 @@ function LinkedTab() {
 
   if (!selectedEntityId) {
     return (
-      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
-        <span className="text-2xl mb-2">🔗</span>
-        Select an entity to view linked notes
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center gap-2">
+        <span className="text-2xl">🔗</span>
+        <p>Select an entity from the <strong>Entity</strong> tab to see its linked notes.</p>
       </div>
     );
   }
@@ -288,9 +441,9 @@ function LinkedTab() {
 
   if (!entityNotes || entityNotes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center">
-        <span className="text-2xl mb-2">📝</span>
-        No linked notes yet
+      <div className="flex flex-col items-center justify-center h-[200px] text-ink-ghost text-sm px-4 text-center gap-2">
+        <span className="text-2xl">📝</span>
+        No linked notes yet. Mention this entity in a note to link them.
       </div>
     );
   }
@@ -333,35 +486,36 @@ function LinkedTab() {
 // ---------------------------------------------------------------------------
 
 function MapTab() {
+  const navigate = useNavigate();
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const { data: entity } = useEntity(selectedEntityId);
   const { data: entityNotes } = useEntityNotes(selectedEntityId);
   const { data: mapLocations = [] } = useMapLocations();
 
-  // Collect note source_ids for the selected entity's notes
-  const entityNoteIds = new Set((entityNotes ?? []).map((n) => n.id));
-  // Find map locations for those notes + the entity itself
-  const relevantLocations = mapLocations.filter(
-    (l) =>
-      (l.source_type === 'entity' && l.source_id === selectedEntityId) ||
-      (l.source_type === 'note' && entityNoteIds.has(l.source_id)),
-  );
+  // Show all locations when no entity is selected, or filter to entity's locations
+  const relevantLocations = selectedEntityId
+    ? (() => {
+        const entityNoteIds = new Set((entityNotes ?? []).map((n) => n.id));
+        return mapLocations.filter(
+          (l) =>
+            (l.source_type === 'entity' && l.source_id === selectedEntityId) ||
+            (l.source_type === 'note' && entityNoteIds.has(l.source_id)),
+        );
+      })()
+    : mapLocations;
 
   return (
     <div className="px-3 pb-4">
-      <h4 className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest mb-3 mt-1">
-        Location Map
-      </h4>
-      <CSSMiniMap
-        large
-        activeEntityName={entity?.name}
-        activeEntityId={selectedEntityId ?? undefined}
+      <MapboxMiniMap
         locations={relevantLocations}
+        height={200}
+        label="Location Map"
+        onExpand={() => navigate('/map')}
       />
       <p className="text-[10px] text-ink-ghost text-center mt-2">
         {entity
           ? `Showing locations linked to ${entity.name}`
-          : 'Select an entity to view their locations'}
+          : `Showing all ${relevantLocations.length} field locations`}
       </p>
     </div>
   );
@@ -521,7 +675,6 @@ function InventoryStatusBadge({ status }: { status: string }) {
       </span>
     );
   }
-  // ready / charged / packed
   const label =
     status === 'charged' ? 'Charged'
     : status === 'packed' ? 'Packed'
@@ -615,164 +768,134 @@ function noteStrength(note: NoteSummary): 1 | 2 | 3 {
 }
 
 // ---------------------------------------------------------------------------
-// CSS-drawn mini map (no Mapbox — purely CSS/SVG with location pins)
-// Uses real data from useMapLocations when available, falls back to static pins.
+// Mapbox mini map — replaces the old CSS-drawn mini map
 // ---------------------------------------------------------------------------
 
-import type { MapLocation } from '../../types';
-
-// Approximate (x%, y%) positions within a 100×100 viewBox
-// for known Sri Lanka locations (used as fallback and for entity matching)
-const LOCATION_POSITIONS: Record<string, { x: number; y: number }> = {
-  kandy: { x: 52, y: 30 },
-  'kandy highlands': { x: 52, y: 30 },
-  galle: { x: 38, y: 72 },
-  'galle coastal': { x: 38, y: 72 },
-  ella: { x: 64, y: 65 },
-  'ella caves': { x: 64, y: 65 },
-  peradeniya: { x: 48, y: 32 },
-  colombo: { x: 22, y: 55 },
-};
-
-function nameToPos(name: string): { x: number; y: number } | null {
-  return LOCATION_POSITIONS[name.toLowerCase()] ?? null;
+interface MapboxMiniMapProps {
+  locations: MapLocation[];
+  height?: number;
+  onExpand?: () => void;
+  label?: string;
 }
 
-interface MiniMapPin {
-  label: string;
-  x: number;
-  y: number;
-  color: string;
-  active?: boolean;
-}
-
-interface CSSMiniMapProps {
-  large?: boolean;
-  activeEntityName?: string;
-  activeEntityId?: string;
-  locations?: MapLocation[];
-}
-
-function CSSMiniMap({ large = false, activeEntityName, locations }: CSSMiniMapProps) {
-  const height = large ? 200 : 130;
-
-  // Build pins from real location data if provided, otherwise use static fallback
-  let pins: MiniMapPin[] = [];
-
-  if (locations && locations.length > 0) {
-    pins = locations
-      .map((loc): MiniMapPin | null => {
-        const pos = nameToPos(loc.location_name ?? loc.name);
-        if (!pos) return null;
-        const isActive =
-          (activeEntityName && loc.name.toLowerCase() === activeEntityName.toLowerCase()) ||
-          loc.source_type === 'entity';
-        return {
-          label: loc.name,
-          x: pos.x,
-          y: pos.y,
-          color: isActive ? 'var(--color-coral)' : loc.source_type === 'entity' ? 'var(--color-sage)' : 'var(--color-amber)',
-          active: !!isActive,
-        };
-      })
-      .filter((p): p is MiniMapPin => p !== null);
+function pinColorForLoc(loc: MapLocation): string {
+  if (loc.source_type === 'entity') return '#6B8C7A';
+  switch (loc.note_type) {
+    case 'interview': return '#CF6A4C';
+    case 'voice_memo': return '#6B8C7A';
+    case 'photo': return '#CF6A4C';
+    default: return '#C4844A';
   }
+}
 
-  // Deduplicate by label (same location may appear from multiple notes)
-  const seen = new Set<string>();
-  pins = pins.filter((p) => {
-    if (seen.has(p.label)) return false;
-    seen.add(p.label);
-    return true;
-  });
+function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
-  // Static fallback when no real data
-  if (pins.length === 0) {
-    pins = [
-      { label: 'Kandy', x: 52, y: 30, color: 'var(--color-coral)', active: true },
-      { label: 'Galle', x: 38, y: 72, color: 'var(--color-sage)' },
-      { label: 'Ella', x: 64, y: 65, color: 'var(--color-amber)' },
-      { label: 'Colombo', x: 22, y: 55, color: 'var(--color-sage)' },
-    ];
-  }
+  const token = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
+  const hasToken = !!token;
 
-  return (
-    <div
-      className="relative rounded-xl overflow-hidden border border-border-light"
-      style={{
-        height,
-        background: 'linear-gradient(160deg, #e8f0ea 0%, #d4e4d8 40%, #c8d8cc 100%)',
-      }}
-    >
-      {/* Decorative SVG layer */}
-      <svg
-        className="absolute inset-0 w-full h-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
+  useEffect(() => {
+    if (!containerRef.current || !hasToken) return;
+
+    // Destroy previous map if re-mounting
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: 'mapbox://styles/mapbox/light-v11',
+      center: [80.6, 7.5],
+      zoom: 6,
+      interactive: false,
+      attributionControl: false,
+    });
+
+    mapRef.current = map;
+
+    map.on('load', () => {
+      // Remove stale markers
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+
+      if (locations.length === 0) return;
+
+      // Add markers
+      const bounds = new mapboxgl.LngLatBounds();
+      locations.forEach((loc) => {
+        const color = pinColorForLoc(loc);
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width: 10px; height: 10px; border-radius: 50%;
+          background: ${color};
+          border: 2px solid white;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+        `;
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([loc.lng, loc.lat])
+          .addTo(map);
+        markersRef.current.push(marker);
+        bounds.extend([loc.lng, loc.lat]);
+      });
+
+      // Fit bounds to markers
+      if (locations.length === 1) {
+        map.setCenter([locations[0].lng, locations[0].lat]);
+        map.setZoom(9);
+      } else if (locations.length > 1) {
+        map.fitBounds(bounds, { padding: 32, maxZoom: 12, animate: false });
+      }
+    });
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasToken, JSON.stringify(locations.map((l) => l.id))]);
+
+  if (!hasToken) {
+    return (
+      <div
+        className="rounded-xl border border-border-light flex items-center justify-center text-[11px] text-ink-ghost"
+        style={{ height, background: '#f0ede8' }}
       >
-        {/* Connection lines between pins */}
-        {pins.length > 1 && pins.slice(1).map((pin, i) => (
-          <line
-            key={`line-${i}`}
-            x1={pins[0].x} y1={pins[0].y}
-            x2={pin.x} y2={pin.y}
-            stroke="rgba(107,140,122,.35)"
-            strokeWidth="0.8"
-            strokeDasharray="2,1.5"
-          />
-        ))}
-        {/* Terrain patches */}
-        <ellipse cx="60" cy="20" rx="18" ry="10" fill="rgba(107,140,122,.15)" />
-        <ellipse cx="30" cy="80" rx="15" ry="8" fill="rgba(107,140,122,.10)" />
-        <ellipse cx="75" cy="55" rx="12" ry="9" fill="rgba(107,140,122,.12)" />
-        {/* Coastline hint */}
-        <path d="M0 90 Q10 75 20 80 Q30 85 35 78 Q40 72 38 72 Q36 80 30 88 Q20 95 10 100 Z" fill="rgba(100,160,200,.15)" />
-      </svg>
-
-      {/* Pins */}
-      {pins.map((pin) => (
-        <div
-          key={pin.label}
-          className="absolute flex flex-col items-center"
-          style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -100%)' }}
-        >
-          <div
-            className="rounded-full border-2 border-white shadow-sm"
-            style={{
-              width: pin.active ? 10 : 7,
-              height: pin.active ? 10 : 7,
-              background: pin.color,
-              boxShadow: pin.active ? `0 0 0 3px ${pin.color}33` : undefined,
-            }}
-          />
-          <span
-            className="text-[8.5px] font-medium whitespace-nowrap mt-0.5 px-1 py-0.5 rounded"
-            style={{
-              color: pin.active ? 'var(--color-coral)' : 'var(--color-ink-muted, #8a7d6e)',
-              background: 'rgba(255,255,255,.75)',
-              fontWeight: pin.active ? 600 : 400,
-            }}
-          >
-            {pin.label}
-          </span>
-        </div>
-      ))}
-
-      {/* Legend */}
-      <div className="absolute bottom-1.5 left-2 flex items-center gap-2">
-        <LegendDot color="var(--color-coral)" label="Active" />
-        <LegendDot color="var(--color-sage)" label="Visited" />
-        <LegendDot color="var(--color-amber)" label="Noted" />
+        Map requires VITE_MAPBOX_TOKEN
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <div className="flex items-center gap-1">
-      <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-      <span className="text-[8px] text-ink-muted font-medium">{label}</span>
+    <div>
+      {(label || onExpand) && (
+        <div className="flex items-center justify-between mb-1.5">
+          {label && (
+            <span className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest flex items-center gap-1">
+              <span>📍</span> {label}
+            </span>
+          )}
+          {onExpand && (
+            <button
+              onClick={onExpand}
+              className="text-[11px] text-ink-muted hover:text-coral cursor-pointer transition-colors"
+              title="Open full map"
+            >
+              ⤢ Expand
+            </button>
+          )}
+        </div>
+      )}
+      <div
+        className="rounded-xl overflow-hidden border border-border-light"
+        style={{ height }}
+      >
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      </div>
     </div>
   );
 }
@@ -784,12 +907,13 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 function EntityTabMiniMap({
   entityId,
   entityNotes,
+  onExpand,
 }: {
   entityId: string | null;
   entityNotes?: NoteSummary[];
+  onExpand?: () => void;
 }) {
   const { data: mapLocations = [] } = useMapLocations();
-  const { data: entity } = useEntity(entityId);
 
   const entityNoteIds = new Set((entityNotes ?? []).map((n) => n.id));
   const relevantLocations = mapLocations.filter(
@@ -799,20 +923,11 @@ function EntityTabMiniMap({
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-semibold text-ink-ghost uppercase tracking-widest flex items-center gap-1">
-          <span>📍</span> Location
-        </span>
-        <button className="text-[11px] text-ink-muted hover:text-ink cursor-pointer transition-colors">
-          ⤢
-        </button>
-      </div>
-      <CSSMiniMap
-        activeEntityName={entity?.name}
-        activeEntityId={entityId ?? undefined}
-        locations={relevantLocations}
-      />
-    </div>
+    <MapboxMiniMap
+      locations={relevantLocations}
+      height={140}
+      label="Location"
+      onExpand={onExpand}
+    />
   );
 }

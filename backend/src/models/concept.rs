@@ -31,3 +31,10 @@ pub struct CreateConcept {
     pub category: Option<String>,
     pub icon: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateConcept {
+    pub name: Option<String>,
+    pub category: Option<String>,
+    pub icon: Option<String>,
+}

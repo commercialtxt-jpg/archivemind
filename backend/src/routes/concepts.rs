@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::get,
+    routing::{delete, get, put},
     Json, Router,
 };
 use sqlx::PgPool;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
-use crate::models::concept::*;
+use crate::models::concept::{Concept, ConceptWithCount, CreateConcept, UpdateConcept};
 use crate::response::ApiResponse;
 
 async fn list_concepts(
@@ -80,8 +80,56 @@ async fn create_concept(
     Ok(ApiResponse::ok(concept))
 }
 
+async fn update_concept(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateConcept>,
+) -> Result<Json<ApiResponse<Concept>>, AppError> {
+    let concept = sqlx::query_as::<_, Concept>(
+        "UPDATE concepts SET \
+         name = COALESCE($3, name), \
+         category = COALESCE($4, category), \
+         icon = COALESCE($5, icon), \
+         updated_at = now() \
+         WHERE id = $1 AND workspace_id = $2 \
+         RETURNING id, workspace_id, name, category, icon, created_at, updated_at",
+    )
+    .bind(id)
+    .bind(auth.workspace_id)
+    .bind(&body.name)
+    .bind(&body.category)
+    .bind(&body.icon)
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Concept not found".to_string()))?;
+
+    Ok(ApiResponse::ok(concept))
+}
+
+async fn delete_concept(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let result = sqlx::query("DELETE FROM concepts WHERE id = $1 AND workspace_id = $2")
+        .bind(id)
+        .bind(auth.workspace_id)
+        .execute(&pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Concept not found".to_string()));
+    }
+
+    Ok(ApiResponse::ok(serde_json::json!({ "deleted": true })))
+}
+
 pub fn routes() -> Router<PgPool> {
     Router::new()
         .route("/api/v1/concepts", get(list_concepts).post(create_concept))
-        .route("/api/v1/concepts/{id}", get(get_concept))
+        .route(
+            "/api/v1/concepts/{id}",
+            get(get_concept).put(update_concept).delete(delete_concept),
+        )
 }

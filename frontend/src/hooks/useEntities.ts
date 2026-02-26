@@ -75,6 +75,21 @@ export function useCreateEntity() {
   });
 }
 
+export function useNoteEntities(noteId: string | null) {
+  return useQuery({
+    queryKey: ['notes', noteId, 'entities'],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<ApiResponse<Entity[]>>(`/notes/${noteId}/entities`);
+        return data.data ?? [];
+      } catch {
+        return [] as Entity[];
+      }
+    },
+    enabled: !!noteId,
+  });
+}
+
 export function useEntityTopics(id: string | null) {
   return useQuery({
     queryKey: ['entities', id, 'topics'],

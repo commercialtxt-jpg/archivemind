@@ -1,5 +1,6 @@
+import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
-import { useEntity } from '../../hooks/useEntities';
+import { useNoteEntities } from '../../hooks/useEntities';
 import type { Note } from '../../types';
 
 interface NoteMetaBarProps {
@@ -7,28 +8,21 @@ interface NoteMetaBarProps {
 }
 
 export default function NoteMetaBar({ note }: NoteMetaBarProps) {
-  const selectedEntityId = useUIStore((s) => s.selectedEntityId);
+  const navigate = useNavigate();
   const setSelectedEntityId = useUIStore((s) => s.setSelectedEntityId);
-  const setActiveView = useUIStore((s) => s.setActiveView);
-  const { data: entity } = useEntity(selectedEntityId);
+  const { data: noteEntities } = useNoteEntities(note.id);
+
+  const handleEntityClick = (entityId: string) => {
+    // setSelectedEntityId also opens the entity panel (see uiStore)
+    setSelectedEntityId(entityId);
+  };
 
   const chips: Array<{
     icon: string;
     label: string;
-    variant: 'meta' | 'entity' | 'ai';
-    entityId?: string;
+    variant: 'meta' | 'ai';
     isLocation?: boolean;
   }> = [];
-
-  // Entity chip (coral) — clickable to open entity in panel
-  if (entity) {
-    chips.push({
-      icon: entity.avatar_initials,
-      label: entity.name,
-      variant: 'entity',
-      entityId: entity.id,
-    });
-  }
 
   if (note.location_name) {
     const loc = note.gps_coords
@@ -56,30 +50,31 @@ export default function NoteMetaBar({ note }: NoteMetaBarProps) {
     chips.push({ icon: '✓', label: 'AI Transcribed', variant: 'ai' });
   }
 
-  if (chips.length === 0) return null;
+  const hasContent = (noteEntities && noteEntities.length > 0) || chips.length > 0;
+  if (!hasContent) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 py-3 border-b border-border-light">
-      {chips.map((chip, i) => {
-        if (chip.variant === 'entity') {
-          return (
-            <button
-              key={i}
-              onClick={() => {
-                if (chip.entityId) setSelectedEntityId(chip.entityId);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-[11.5px] rounded-full
-                bg-coral text-white font-medium cursor-pointer hover:bg-coral/90 transition-colors"
-              title="View entity details"
-            >
-              <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px] font-semibold">
-                {chip.icon}
-              </span>
-              {chip.label}
-            </button>
-          );
-        }
+      {/* Entity chips — one per linked entity */}
+      {noteEntities?.map((entity) => {
+        const initials = entity.avatar_initials || entity.name.slice(0, 2).toUpperCase();
+        return (
+          <button
+            key={entity.id}
+            onClick={() => handleEntityClick(entity.id)}
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11.5px] rounded-full
+              bg-coral text-white font-medium cursor-pointer hover:bg-coral/90 transition-colors"
+            title="View entity details"
+          >
+            <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px] font-semibold leading-none">
+              {initials}
+            </span>
+            {entity.name}
+          </button>
+        );
+      })}
 
+      {chips.map((chip, i) => {
         if (chip.variant === 'ai') {
           return (
             <span
@@ -98,7 +93,7 @@ export default function NoteMetaBar({ note }: NoteMetaBarProps) {
           return (
             <button
               key={i}
-              onClick={() => setActiveView('map')}
+              onClick={() => navigate('/map')}
               className="inline-flex items-center gap-1.5 px-3 py-1 text-[11.5px] rounded-full
                 bg-parchment border border-border-light text-ink-muted
                 hover:border-coral hover:text-coral transition-all cursor-pointer"
@@ -114,8 +109,7 @@ export default function NoteMetaBar({ note }: NoteMetaBarProps) {
           <span
             key={i}
             className="inline-flex items-center gap-1.5 px-3 py-1 text-[11.5px] rounded-full
-              bg-parchment border border-border-light text-ink-muted
-              hover:border-coral hover:text-coral transition-all cursor-default"
+              bg-parchment border border-border-light text-ink-muted cursor-default"
           >
             <span className="text-[11px]">{chip.icon}</span>
             {chip.label}

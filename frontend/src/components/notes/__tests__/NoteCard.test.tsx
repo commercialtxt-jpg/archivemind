@@ -9,6 +9,11 @@ vi.mock('../../../stores/uiStore', () => ({
   useUIStore: () => '',
 }));
 
+// Stub editorStore so NoteCard doesn't need a store provider
+vi.mock('../../../stores/editorStore', () => ({
+  useEditorStore: () => ({ activeNoteId: null, setActiveNoteId: vi.fn() }),
+}));
+
 // Stub mutation hooks so NoteCard doesn't need a QueryClientProvider.
 // Note: vi.mock is hoisted, so no top-level variables may be referenced here.
 vi.mock('../../../hooks/useNotes', async (importOriginal) => {
@@ -16,6 +21,7 @@ vi.mock('../../../hooks/useNotes', async (importOriginal) => {
   return {
     ...actual,
     useToggleStar: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteNote: () => ({ mutate: vi.fn(), isPending: false }),
     useRestoreNote: () => ({ mutate: vi.fn(), isPending: false }),
     usePermanentDeleteNote: () => ({ mutate: vi.fn(), isPending: false }),
   };

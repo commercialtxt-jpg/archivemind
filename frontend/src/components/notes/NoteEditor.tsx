@@ -25,8 +25,16 @@ export default function NoteEditor() {
   const [isRecording, setIsRecording] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Keep a ref to activeNoteId so the onUpdate closure always reads the current
+  // value without going stale between debounce ticks.
+  const activeNoteIdRef = useRef<string | null>(activeNoteId);
+  // Track previous activeNoteId so we can detect a note switch.
+  const prevNoteIdRef = useRef<string | null>(null);
 
-  const activeRoutine = routinesRes?.data?.find((r) => r.is_active);
+  // useRoutines queryFn returns ApiResponse<Routine[]> — TanStack stores it as the query data.
+  // Destructuring `{ data: routinesRes }` gives us ApiResponse<Routine[]>, so .data is Routine[].
+  const routinesList = Array.isArray(routinesRes?.data) ? routinesRes.data : [];
+  const activeRoutine = routinesList.find((r) => r.is_active);
 
   // Fetch media counts so we can auto-show players when media exists
   const { data: audioMedia } = useMedia(activeNoteId, 'audio');
@@ -67,31 +75,76 @@ export default function NoteEditor() {
       setDirty(true);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        if (activeNoteId) {
+        // Read from the ref — avoids the stale-closure bug where an old
+        // note's debounce timer fires and saves into the newly-created note.
+        const currentId = activeNoteIdRef.current;
+        if (currentId) {
           const json = editor.getJSON();
           const text = editor.getText();
-          updateNote.mutate({ id: activeNoteId, body: json as never, body_text: text } as never);
+          updateNote.mutate({ id: currentId, body: json as never, body_text: text } as never);
           setDirty(false);
         }
       }, 1000);
     },
   });
 
-  // Sync note data into editor when note changes.
-  // Syncing server state into local controlled state via useEffect is the correct pattern here.
+  // Keep the activeNoteId ref in sync so the onUpdate debounce closure is
+  // never stale (see ref usage in useEditor above).
   useEffect(() => {
-    if (note) {
-      setTitle(note.title);
-      if (editor && note.body) {
+    activeNoteIdRef.current = activeNoteId;
+  }, [activeNoteId]);
+
+  // === Note-switch guard ===
+  // When activeNoteId changes, immediately clear the editor and title so the
+  // old note's content is never visible while the new note is loading.
+  // Also cancel any pending debounced save so it cannot write old content
+  // into the newly-created note.
+  useEffect(() => {
+    if (activeNoteId === prevNoteIdRef.current) return;
+    prevNoteIdRef.current = activeNoteId;
+
+    // Cancel any pending debounced body save from the previous note.
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = undefined;
+    }
+
+    // Immediately reset title and editor content.
+    setTitle('');
+    if (editor) {
+      editor.commands.setContent('');
+    }
+  }, [activeNoteId, editor]);
+
+  // === Note-data sync ===
+  // Once the server data for the active note arrives, populate the editor.
+  // We key on note.id so this only runs when we have fresh data for a
+  // *different* note — not on every background refetch.
+  useEffect(() => {
+    if (!note) return;
+
+    setTitle(note.title);
+
+    if (editor) {
+      const hasBody =
+        note.body !== null &&
+        note.body !== undefined &&
+        typeof note.body === 'object' &&
+        Object.keys(note.body).length > 0;
+
+      if (hasBody) {
         const currentContent = JSON.stringify(editor.getJSON());
         const newContent = JSON.stringify(note.body);
-        if (currentContent !== newContent && Object.keys(note.body).length > 0) {
+        if (currentContent !== newContent) {
           editor.commands.setContent(note.body);
         }
+      } else {
+        // New / empty note — make sure the editor is blank.
+        editor.commands.setContent('');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.id]); // Only re-run when note ID changes
+  }, [note?.id]); // Only re-run when the note ID changes, not on every refetch
 
   // Auto-resize title textarea
   useEffect(() => {

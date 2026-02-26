@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use sqlx::PgPool;
@@ -82,6 +82,26 @@ async fn update_field_trip(
     Ok(ApiResponse::ok(trip))
 }
 
+async fn delete_field_trip(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, AppError> {
+    let result = sqlx::query(
+        "DELETE FROM field_trips WHERE id = $1 AND workspace_id = $2",
+    )
+    .bind(id)
+    .bind(auth.workspace_id)
+    .execute(&pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Field trip not found".to_string()));
+    }
+
+    Ok(ApiResponse::ok(serde_json::json!({ "deleted": true })))
+}
+
 async fn associate_note(
     auth: AuthUser,
     State(pool): State<PgPool>,
@@ -114,6 +134,9 @@ pub fn routes() -> Router<PgPool> {
             "/api/v1/field-trips",
             get(list_field_trips).post(create_field_trip),
         )
-        .route("/api/v1/field-trips/{id}", put(update_field_trip))
+        .route(
+            "/api/v1/field-trips/{id}",
+            put(update_field_trip).delete(delete_field_trip),
+        )
         .route("/api/v1/field-trips/{id}/notes", post(associate_note))
 }

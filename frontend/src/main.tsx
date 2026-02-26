@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './routes';
 import { useAuthStore } from './stores/authStore';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import './styles/tailwind.css';
 
 const queryClient = new QueryClient({

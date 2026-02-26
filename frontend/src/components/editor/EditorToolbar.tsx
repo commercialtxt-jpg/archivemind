@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Editor } from '@tiptap/react';
 import { useOfflineStore } from '../../stores/offlineStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -23,6 +24,7 @@ export default function EditorToolbar({
   onRecordingStart,
   onRecordingStop,
 }: EditorToolbarProps) {
+  const navigate = useNavigate();
   const { isOffline, setOffline } = useOfflineStore();
   const { entityPanelOpen, toggleEntityPanel } = useUIStore();
   const [toast, setToast] = useState<string | null>(null);
@@ -30,6 +32,13 @@ export default function EditorToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+
+  // Listen for FAB record button event
+  useEffect(() => {
+    const handler = () => { if (note && !isRecording) handleVoiceClick(); };
+    window.addEventListener('archivemind:start-recording', handler);
+    return () => window.removeEventListener('archivemind:start-recording', handler);
+  });
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -167,9 +176,9 @@ export default function EditorToolbar({
       <div className="flex items-center justify-between px-4 py-2">
         {/* View tabs */}
         <div className="flex items-center gap-1 bg-parchment border border-border rounded-lg p-[3px]">
-          <ViewTab label="Notes" icon="✏️" active={activeTab === 'notes'} onClick={() => onTabChange('notes')} />
-          <ViewTab label="Map" icon="🏠" active={activeTab === 'map'} onClick={() => onTabChange('map')} />
-          <ViewTab label="Graph" icon="🕸" active={activeTab === 'graph'} onClick={() => onTabChange('graph')} />
+          <ViewTab label="Notes" icon="✏️" active={activeTab === 'notes'} onClick={() => { onTabChange('notes'); navigate('/journal'); }} />
+          <ViewTab label="Map" icon="🏠" active={activeTab === 'map'} onClick={() => { onTabChange('map'); navigate('/map'); }} />
+          <ViewTab label="Graph" icon="🕸" active={activeTab === 'graph'} onClick={() => { onTabChange('graph'); navigate('/graph'); }} />
         </div>
 
         {/* Action buttons */}
