@@ -403,3 +403,13 @@ html, body, #root {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Mobile entity sheet — force EntityPanel to fill width instead of fixed 280px */
+.mobile-entity-sheet > div {
+  width: 100% !important;
+  border-left: none !important;
+}
+/* Hide the collapsed-state button when inside mobile sheet */
+.mobile-entity-sheet > button {
+  display: none !important;
+}
