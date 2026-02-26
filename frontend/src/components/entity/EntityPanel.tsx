@@ -5,7 +5,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useEntities, useEntity, useEntityTopics, useEntityNotes } from '../../hooks/useEntities';
 import { useInventory, useUpdateInventoryItem } from '../../hooks/useInventory';
-import { useMapLocations } from '../../hooks/useMap';
+import { useMapLocations, useTrackMapLoad } from '../../hooks/useMap';
 import type { Entity, InventoryItem, NoteSummary, MapLocation } from '../../types';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
@@ -793,6 +793,7 @@ function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniM
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mapReadyRef = useRef(false);
+  const trackMapLoad = useTrackMapLoad();
 
   const token = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
   const hasToken = !!token;
@@ -820,6 +821,7 @@ function MapboxMiniMap({ locations, height = 140, onExpand, label }: MapboxMiniM
 
     map.on('load', () => {
       mapReadyRef.current = true;
+      trackMapLoad();
     });
 
     return () => {
