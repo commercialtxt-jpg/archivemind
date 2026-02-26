@@ -4,9 +4,13 @@ import {
   getPendingChanges,
   removePendingChange,
   countPendingChanges,
+  getAllMediaBlobs,
+  removeMediaBlob,
+  countMediaBlobs,
   type PendingChange,
 } from '../lib/offlineDb';
 import api from '../lib/api';
+import type { ApiResponse, Media } from '../types';
 
 interface OfflineState {
   isOffline: boolean;
@@ -34,9 +38,16 @@ interface OfflineState {
   /**
    * Replay all queued pending changes against the API in creation order.
    * Called automatically when the network comes back online.
-   * Returns the number of changes that were successfully flushed.
+   * Returns the number of changes that were successfully flushed,
+   * plus a map of offline client IDs → server IDs for created notes.
    */
-  flushPendingChanges: () => Promise<number>;
+  flushPendingChanges: () => Promise<{ flushed: number; idMap: Record<string, string> }>;
+
+  /**
+   * Upload all queued media blobs, remapping offline note IDs to real server IDs.
+   * Called after flushPendingChanges when coming back online.
+   */
+  flushMediaBlobs: (idMap: Record<string, string>) => Promise<number>;
 
   /** Sync pendingChanges counter from IndexedDB (e.g. on app init). */
   syncPendingCount: () => Promise<void>;
@@ -71,15 +82,23 @@ export const useOfflineStore = create<OfflineState>((set, get) => ({
 
   flushPendingChanges: async () => {
     const changes = await getPendingChanges();
-    if (changes.length === 0) return 0;
+    if (changes.length === 0) return { flushed: 0, idMap: {} };
 
     set({ syncStatus: 'syncing' });
     let flushed = 0;
+    const idMap: Record<string, string> = {};
 
     for (const change of changes) {
       try {
         if (change.method === 'POST') {
-          await api.post(change.url, change.body);
+          const resp = await api.post(change.url, change.body);
+          // Track offline ID → server ID mapping for note creates
+          const body = change.body as Record<string, unknown> | null;
+          const clientId = body?.id as string | undefined;
+          const serverId = resp.data?.data?.id as string | undefined;
+          if (clientId?.startsWith('offline-') && serverId) {
+            idMap[clientId] = serverId;
+          }
         } else if (change.method === 'PUT') {
           await api.put(change.url, change.body);
         } else if (change.method === 'DELETE') {
@@ -95,17 +114,60 @@ export const useOfflineStore = create<OfflineState>((set, get) => ({
     }
 
     const remaining = await countPendingChanges();
+    const blobCount = await countMediaBlobs();
     set({
-      pendingChanges: remaining,
-      syncStatus: remaining === 0 ? 'synced' : 'error',
-      lastSyncAt: remaining === 0 ? new Date().toISOString() : get().lastSyncAt,
+      pendingChanges: remaining + blobCount,
+      syncStatus: remaining === 0 && blobCount === 0 ? 'synced' : (remaining > 0 ? 'error' : 'syncing'),
+      lastSyncAt: remaining === 0 && blobCount === 0 ? new Date().toISOString() : get().lastSyncAt,
     });
 
-    return flushed;
+    return { flushed, idMap };
+  },
+
+  flushMediaBlobs: async (idMap: Record<string, string>) => {
+    const blobs = await getAllMediaBlobs();
+    if (blobs.length === 0) return 0;
+
+    let uploaded = 0;
+
+    for (const blob of blobs) {
+      try {
+        // Remap offline note ID → server note ID
+        const noteId = idMap[blob.noteId] ?? blob.noteId;
+
+        // Build FormData from stored ArrayBuffer
+        const file = new File([blob.data], blob.filename, { type: blob.mimeType });
+        const form = new FormData();
+        form.append('file', file);
+        form.append('note_id', noteId);
+        form.append('media_type', blob.mediaType);
+
+        await api.post<ApiResponse<Media>>('/media/upload', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        await removeMediaBlob(blob.id);
+        uploaded++;
+      } catch (err) {
+        console.warn('[offlineStore] Failed to upload media blob:', blob.id, err);
+        break;
+      }
+    }
+
+    const remaining = await countPendingChanges();
+    const blobsLeft = await countMediaBlobs();
+    set({
+      pendingChanges: remaining + blobsLeft,
+      syncStatus: remaining === 0 && blobsLeft === 0 ? 'synced' : 'error',
+      lastSyncAt: remaining === 0 && blobsLeft === 0 ? new Date().toISOString() : get().lastSyncAt,
+    });
+
+    return uploaded;
   },
 
   syncPendingCount: async () => {
-    const count = await countPendingChanges();
-    set({ pendingChanges: count });
+    const pendingCount = await countPendingChanges();
+    const blobCount = await countMediaBlobs();
+    set({ pendingChanges: pendingCount + blobCount });
   },
 }));

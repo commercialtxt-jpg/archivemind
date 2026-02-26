@@ -3,6 +3,7 @@ import { useGeolocation } from '../../hooks/useGeolocation';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useCreateNote } from '../../hooks/useNotes';
 import { useUploadMedia } from '../../hooks/useMedia';
+import { useOfflineStore } from '../../stores/offlineStore';
 
 interface QuickCaptureModalProps {
   open: boolean;
@@ -23,6 +24,8 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
   const [quickNotes, setQuickNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const isOffline = useOfflineStore((s) => s.isOffline);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -44,6 +47,7 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
       setQuickNotes('');
       setIsSaving(false);
       setSaveError(null);
+      setSavedOffline(false);
       geo.clear();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,7 +138,13 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
         await uploadMedia.mutateAsync({ file: audioFile, noteId: note.id, mediaType: 'audio' });
       }
 
-      onCaptured(note.id);
+      // If offline, show a brief "saved offline" toast then close
+      if (isOffline || note.id.startsWith('offline-')) {
+        setSavedOffline(true);
+        setTimeout(() => onClose(), 1200);
+      } else {
+        onCaptured(note.id);
+      }
     } catch {
       setSaveError('Save failed — please try again');
       setIsSaving(false);
@@ -315,6 +325,13 @@ export default function QuickCaptureModal({ open, onClose, onCaptured }: QuickCa
                 placeholder:text-ink-ghost/50 focus:outline-none focus:border-sage transition-colors resize-none"
             />
           </div>
+
+          {/* ── Saved offline ── */}
+          {savedOffline && (
+            <p className="text-[12px] text-sage font-medium animate-fade-in">
+              Saved offline — will sync when back online
+            </p>
+          )}
 
           {/* ── Error ── */}
           {saveError && (

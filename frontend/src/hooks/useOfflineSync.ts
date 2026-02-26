@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useOfflineStore } from '../stores/offlineStore';
 
 export function useOfflineSync() {
-  const { setOffline, flushPendingChanges, syncPendingCount } = useOfflineStore();
+  const { setOffline, flushPendingChanges, flushMediaBlobs, syncPendingCount } = useOfflineStore();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -21,8 +21,12 @@ export function useOfflineSync() {
     const handleOnline = async () => {
       setOffline(false);
       try {
-        const flushed = await flushPendingChanges();
-        if (flushed > 0) {
+        const { flushed, idMap } = await flushPendingChanges();
+
+        // Upload any queued media blobs (with ID remapping for offline notes)
+        const mediaUploaded = await flushMediaBlobs(idMap);
+
+        if (flushed > 0 || mediaUploaded > 0) {
           // Re-fetch all server data after flushing queued mutations
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: ['notes'] }),
@@ -31,6 +35,7 @@ export function useOfflineSync() {
             queryClient.invalidateQueries({ queryKey: ['field-trips'] }),
             queryClient.invalidateQueries({ queryKey: ['inventory'] }),
             queryClient.invalidateQueries({ queryKey: ['routines'] }),
+            queryClient.invalidateQueries({ queryKey: ['media'] }),
           ]);
         }
       } catch (err) {

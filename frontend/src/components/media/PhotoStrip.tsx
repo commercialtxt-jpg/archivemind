@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useMedia, useUploadMedia, mediaFileUrl } from '../../hooks/useMedia';
+import { getMediaBlobsForNote, type MediaBlob } from '../../lib/offlineDb';
 import type { Media } from '../../types';
 import PhotoLightbox from './PhotoLightbox';
 
@@ -30,10 +31,36 @@ function resolvePhotoUrl(photo: Media): string {
 export default function PhotoStrip({ noteId }: PhotoStripProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [offlineBlobs, setOfflineBlobs] = useState<MediaBlob[]>([]);
+  const [offlineBlobUrls, setOfflineBlobUrls] = useState<Map<string, string>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMedia = useUploadMedia();
 
   const { data: photos, isLoading } = useMedia(noteId, 'photo');
+
+  // Load offline media blobs for this note
+  useEffect(() => {
+    let cancelled = false;
+    getMediaBlobsForNote(noteId).then((blobs) => {
+      if (cancelled) return;
+      const photoBlobs = blobs.filter((b) => b.mediaType === 'photo');
+      setOfflineBlobs(photoBlobs);
+
+      // Create object URLs for rendering
+      const urls = new Map<string, string>();
+      for (const blob of photoBlobs) {
+        urls.set(blob.id, URL.createObjectURL(new Blob([blob.data], { type: blob.mimeType })));
+      }
+      // Revoke old URLs
+      setOfflineBlobUrls((prev) => {
+        prev.forEach((url) => URL.revokeObjectURL(url));
+        return urls;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [noteId]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -77,9 +104,12 @@ export default function PhotoStrip({ noteId }: PhotoStripProps) {
     );
   }
 
-  const safePhotos = photos ?? [];
+  // Filter out offline blob IDs from server photos (they may overlap briefly after sync)
+  const offlineBlobIds = new Set(offlineBlobs.map((b) => b.id));
+  const safePhotos = (photos ?? []).filter((p) => !offlineBlobIds.has(p.id));
+  const totalCount = safePhotos.length + offlineBlobs.length;
   const visiblePhotos = safePhotos.slice(0, MAX_VISIBLE);
-  const overflowCount = safePhotos.length - MAX_VISIBLE;
+  const overflowCount = totalCount - Math.min(totalCount, MAX_VISIBLE);
 
   return (
     <>
@@ -102,7 +132,7 @@ export default function PhotoStrip({ noteId }: PhotoStripProps) {
       <div className="relative">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
           {/* Empty state inside the strip */}
-          {safePhotos.length === 0 && (
+          {safePhotos.length === 0 && offlineBlobs.length === 0 && (
             <div className="flex items-center justify-center h-[70px] min-w-[180px] bg-parchment border border-dashed border-border rounded-lg text-ink-ghost text-[12px] px-4">
               No photos — click + to add
             </div>
@@ -145,6 +175,29 @@ export default function PhotoStrip({ noteId }: PhotoStripProps) {
                     {photo.label}
                   </p>
                 )}
+              </div>
+            );
+          })}
+
+          {/* Offline blobs with pending badge */}
+          {offlineBlobs.map((blob) => {
+            const url = offlineBlobUrls.get(blob.id);
+            if (!url) return null;
+            return (
+              <div key={blob.id} className="flex-shrink-0 relative">
+                <div className="w-[80px] h-[70px] rounded-lg overflow-hidden border border-dashed border-amber">
+                  <img
+                    src={url}
+                    alt={blob.filename}
+                    className="w-full h-full object-cover opacity-80"
+                  />
+                  {/* Pending upload overlay */}
+                  <div className="absolute inset-0 rounded-lg bg-amber/20 flex items-center justify-center">
+                    <span className="bg-amber/90 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-full">
+                      Pending
+                    </span>
+                  </div>
+                </div>
               </div>
             );
           })}

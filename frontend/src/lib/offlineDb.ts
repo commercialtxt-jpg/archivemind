@@ -21,6 +21,16 @@ export interface PendingChange {
   createdAt: string;   // ISO timestamp
 }
 
+export interface MediaBlob {
+  id: string;            // unique ID for this blob entry
+  noteId: string;        // note this media belongs to (may be offline-xxx)
+  mediaType: 'photo' | 'audio';
+  data: ArrayBuffer;     // raw file data
+  filename: string;
+  mimeType: string;
+  createdAt: string;     // ISO timestamp
+}
+
 interface ArchiveMindDB extends DBSchema {
   notes: {
     key: string;
@@ -59,6 +69,11 @@ interface ArchiveMindDB extends DBSchema {
     value: Media;
     indexes: { 'by-note': string };
   };
+  mediaBlobs: {
+    key: string;
+    value: MediaBlob;
+    indexes: { 'by-note': string };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +85,7 @@ let _db: IDBPDatabase<ArchiveMindDB> | null = null;
 async function getDb(): Promise<IDBPDatabase<ArchiveMindDB>> {
   if (_db) return _db;
 
-  _db = await openDB<ArchiveMindDB>('archivemind', 2, {
+  _db = await openDB<ArchiveMindDB>('archivemind', 3, {
     upgrade(db, oldVersion) {
       // Version 1 stores
       if (oldVersion < 1) {
@@ -102,6 +117,14 @@ async function getDb(): Promise<IDBPDatabase<ArchiveMindDB>> {
         if (!db.objectStoreNames.contains('mediaMetadata')) {
           const mediaStore = db.createObjectStore('mediaMetadata', { keyPath: 'id' });
           mediaStore.createIndex('by-note', 'note_id');
+        }
+      }
+
+      // Version 3 stores
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('mediaBlobs')) {
+          const blobStore = db.createObjectStore('mediaBlobs', { keyPath: 'id' });
+          blobStore.createIndex('by-note', 'noteId');
         }
       }
     },
@@ -358,5 +381,57 @@ export async function getCachedMediaMetadata(noteId?: string): Promise<Media[]> 
   } catch (err) {
     console.warn('[offlineDb] Failed to get cached media metadata:', err);
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Media Blobs (raw file data for offline uploads)
+// ---------------------------------------------------------------------------
+
+export async function storeMediaBlob(blob: MediaBlob): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.put('mediaBlobs', blob);
+  } catch (err) {
+    console.warn('[offlineDb] Failed to store media blob:', err);
+  }
+}
+
+export async function getMediaBlobsForNote(noteId: string): Promise<MediaBlob[]> {
+  try {
+    const db = await getDb();
+    return await db.getAllFromIndex('mediaBlobs', 'by-note', noteId);
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get media blobs for note:', err);
+    return [];
+  }
+}
+
+export async function getAllMediaBlobs(): Promise<MediaBlob[]> {
+  try {
+    const db = await getDb();
+    return await db.getAll('mediaBlobs');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to get all media blobs:', err);
+    return [];
+  }
+}
+
+export async function removeMediaBlob(id: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.delete('mediaBlobs', id);
+  } catch (err) {
+    console.warn('[offlineDb] Failed to remove media blob:', err);
+  }
+}
+
+export async function countMediaBlobs(): Promise<number> {
+  try {
+    const db = await getDb();
+    return await db.count('mediaBlobs');
+  } catch (err) {
+    console.warn('[offlineDb] Failed to count media blobs:', err);
+    return 0;
   }
 }

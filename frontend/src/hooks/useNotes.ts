@@ -2,7 +2,28 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '../lib/api';
 import type { ApiResponse, Note, NoteSummary, NoteCount } from '../types';
-import { cacheNotes, getCachedNotes } from '../lib/offlineDb';
+import { cacheNotes, getCachedNotes, getCachedNote } from '../lib/offlineDb';
+import { useOfflineStore } from '../stores/offlineStore';
+
+/** Check if an error is a network failure (offline, timeout, CORS block). */
+function isNetworkError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    // Axios network error: no response received
+    if ('code' in err && (err as { code?: string }).code === 'ERR_NETWORK') return true;
+    if ('message' in err && typeof (err as { message?: string }).message === 'string') {
+      const msg = (err as { message: string }).message.toLowerCase();
+      if (msg.includes('network error') || msg.includes('failed to fetch')) return true;
+    }
+    // No response object at all → network level failure
+    if ('response' in err && (err as { response?: unknown }).response === undefined) return true;
+  }
+  return false;
+}
+
+/** Generate a client-side offline ID. */
+function offlineId(): string {
+  return `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /** Extract a 403 plan-limit error message from an Axios error, or null. */
 function getPlanLimitError(err: unknown): string | null {
@@ -117,8 +138,50 @@ export function useCreateNote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: Partial<Note>) => {
-      const { data } = await api.post<ApiResponse<Note>>('/notes', body);
-      return data.data;
+      try {
+        const { data } = await api.post<ApiResponse<Note>>('/notes', body);
+        return data.data;
+      } catch (err) {
+        if (isNetworkError(err) || useOfflineStore.getState().isOffline) {
+          // Generate a client-side ID and queue for later sync
+          const id = body.id || offlineId();
+          const now = new Date().toISOString();
+
+          const offlineNote: Note = {
+            id,
+            workspace_id: body.workspace_id ?? '',
+            title: body.title ?? 'Untitled',
+            body: (body.body as Record<string, unknown>) ?? { type: 'doc', content: [] },
+            body_text: body.body_text ?? '',
+            note_type: body.note_type ?? 'field_note',
+            is_starred: body.is_starred ?? false,
+            location_name: body.location_name ?? null,
+            location_lat: body.location_lat ?? null,
+            location_lng: body.location_lng ?? null,
+            gps_coords: body.gps_coords ?? null,
+            weather: body.weather ?? null,
+            temperature_c: body.temperature_c ?? null,
+            time_start: body.time_start ?? null,
+            time_end: body.time_end ?? null,
+            created_at: now,
+            updated_at: now,
+          } as Note;
+
+          // Save to IndexedDB cache so it appears in note lists
+          await cacheNotes([offlineNote as unknown as NoteSummary]);
+
+          // Queue the POST for when we're back online
+          await useOfflineStore.getState().queueChange({
+            id: `pending-create-${id}`,
+            method: 'POST',
+            url: '/notes',
+            body: { ...body, id },
+          });
+
+          return offlineNote;
+        }
+        throw err;
+      }
     },
     onMutate: async (variables) => {
       // Cancel in-flight fetches to avoid overwriting optimistic update
@@ -183,8 +246,29 @@ export function useUpdateNote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...body }: Partial<Note> & { id: string }) => {
-      const { data } = await api.put<ApiResponse<Note>>(`/notes/${id}`, body);
-      return data.data;
+      try {
+        const { data } = await api.put<ApiResponse<Note>>(`/notes/${id}`, body);
+        return data.data;
+      } catch (err) {
+        if (isNetworkError(err) || useOfflineStore.getState().isOffline) {
+          // Update local IndexedDB cache
+          const existing = await getCachedNote(id);
+          if (existing) {
+            await cacheNotes([{ ...existing, ...body, updated_at: new Date().toISOString() } as NoteSummary]);
+          }
+
+          // Queue the PUT for sync
+          await useOfflineStore.getState().queueChange({
+            id: `pending-update-${id}-${Date.now()}`,
+            method: 'PUT',
+            url: `/notes/${id}`,
+            body,
+          });
+
+          return { id, ...body } as Note;
+        }
+        throw err;
+      }
     },
     onMutate: async (variables) => {
       const { id } = variables;
