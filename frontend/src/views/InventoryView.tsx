@@ -47,6 +47,16 @@ export default function InventoryView() {
     return items.filter((i) => (i.category ?? 'general') === categoryFilter);
   }, [items, categoryFilter]);
 
+  // Per-tab category counts — computed once per items change
+  const countsByCategory = useMemo(() => {
+    const counts: Record<string, number> = { all: items.length };
+    items.forEach((i) => {
+      const cat = i.category ?? 'general';
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    });
+    return counts;
+  }, [items]);
+
   // Stats
   const badStatuses = ['low', 'missing'];
   const readyCount = items.filter((i) => !badStatuses.includes(i.status)).length;
@@ -163,9 +173,7 @@ export default function InventoryView() {
         {items.length > 0 && (
           <div className="flex gap-1.5 mb-5 flex-wrap">
             {CATEGORY_TABS.map((tab) => {
-              const count = tab.value === 'all'
-                ? items.length
-                : items.filter((i) => (i.category ?? 'general') === tab.value).length;
+              const count = countsByCategory[tab.value] ?? 0;
               if (tab.value !== 'all' && count === 0) return null;
               return (
                 <button

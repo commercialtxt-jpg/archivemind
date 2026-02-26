@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useEntities, useEntity, useEntityTopics, useEntityNotes } from '../hooks/useEntities';
 import { useUIStore } from '../stores/uiStore';
-import type { EntityType, EntityWithStats } from '../types';
+import type { Entity, EntityType, EntityWithStats } from '../types';
 
 type FilterTab = 'all' | 'person' | 'location' | 'artifact';
 
@@ -28,7 +28,7 @@ export default function EntitiesView() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const typeFilter = activeTab === 'all' ? undefined : activeTab;
   const { data } = useEntities(typeFilter);
-  const entities = (data?.data ?? []) as EntityWithStats[];
+  const entities: Entity[] = data?.data ?? [];
 
   const selectedEntityId = useUIStore((s) => s.selectedEntityId);
   const setSelectedEntityId = useUIStore((s) => s.setSelectedEntityId);
@@ -123,7 +123,7 @@ function EntityCard({
   isSelected,
   onClick,
 }: {
-  entity: EntityWithStats;
+  entity: Entity;
   isSelected: boolean;
   onClick: () => void;
 }) {
@@ -170,12 +170,14 @@ function EntityCard({
             <p className="text-[11.5px] text-ink-muted truncate mb-2">{entity.role}</p>
           )}
 
-          {/* Stats */}
-          <div className="flex items-center gap-3 text-[11px] text-ink-muted">
-            <span>{entity.total_mentions} mentions</span>
-            <span>{entity.session_count} sessions</span>
-            <span>{entity.concept_count} concepts</span>
-          </div>
+          {/* Stats — populated from EntityWithStats when available (detail endpoint only) */}
+          {'total_mentions' in entity && (
+            <div className="flex items-center gap-3 text-[11px] text-ink-muted">
+              <span>{(entity as EntityWithStats).total_mentions} mentions</span>
+              <span>{(entity as EntityWithStats).session_count} sessions</span>
+              <span>{(entity as EntityWithStats).concept_count} concepts</span>
+            </div>
+          )}
         </div>
       </div>
     </button>

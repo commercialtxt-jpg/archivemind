@@ -25,6 +25,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const { data: counts } = useNoteCounts();
   const [search, setSearch] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // --- Field trips ---
   const { data: fieldTrips } = useFieldTrips();
@@ -46,8 +47,8 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const handleSearch = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSearch(e.target.value);
-      const timeout = setTimeout(() => setSearchQuery(e.target.value), 300);
-      return () => clearTimeout(timeout);
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 300);
     },
     [setSearchQuery]
   );
@@ -260,57 +261,60 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
 
       </div>
 
-      {/* Footer: User account + Settings + Sync status */}
+      {/* Footer: User account (mobile only) + Settings + Sync status */}
       <div className="border-t border-border-light">
-        {/* User account row */}
-        <div className="relative">
-          <button
-            onClick={() => setShowUserMenu((v) => !v)}
-            className="flex items-center w-full gap-2.5 px-4 py-[10px] text-[13px] transition-all duration-150 cursor-pointer
-              text-ink-mid hover:bg-white/60"
-            aria-label="User menu"
-          >
-            <span
-              className="flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold text-white font-serif flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--color-coral), var(--color-amber))' }}
+        {/* User account row — only shown in mobile drawer (onItemClick is set by MobileDrawer).
+            On desktop the IconRail already renders the user avatar, so we skip it here. */}
+        {onItemClick && (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu((v) => !v)}
+              className="flex items-center w-full gap-2.5 px-4 py-[10px] text-[13px] transition-all duration-150 cursor-pointer
+                text-ink-mid hover:bg-white/60"
+              aria-label="User menu"
             >
-              {user?.avatar_initials || '?'}
-            </span>
-            <span className="flex-1 text-left truncate text-ink">{user?.display_name || 'Account'}</span>
-          </button>
+              <span
+                className="flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold text-white font-serif flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, var(--color-coral), var(--color-amber))' }}
+              >
+                {user?.avatar_initials || '?'}
+              </span>
+              <span className="flex-1 text-left truncate text-ink">{user?.display_name || 'Account'}</span>
+            </button>
 
-          {showUserMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-              <div className="absolute bottom-full left-2 right-2 z-50 mb-1 bg-warm-white border border-border rounded-lg shadow-card overflow-hidden">
-                <div className="px-3 py-2 border-b border-border-light">
-                  <p className="text-[12px] font-medium text-ink truncate">{user?.display_name}</p>
-                  <p className="text-[11px] text-ink-ghost truncate">{user?.email}</p>
+            {showUserMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                <div className="absolute bottom-full left-2 right-2 z-50 mb-1 bg-warm-white border border-border rounded-lg shadow-card overflow-hidden">
+                  <div className="px-3 py-2 border-b border-border-light">
+                    <p className="text-[12px] font-medium text-ink truncate">{user?.display_name}</p>
+                    <p className="text-[11px] text-ink-ghost truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      navigate('/settings');
+                      onItemClick?.();
+                    }}
+                    className="w-full text-left px-3 py-2 text-[12px] text-ink-mid hover:bg-parchment transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    <span>⚙️</span> Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logout();
+                      navigate('/login');
+                    }}
+                    className="w-full text-left px-3 py-2 text-[12px] text-coral hover:bg-parchment transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    <span>↗</span> Sign out
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    navigate('/settings');
-                    onItemClick?.();
-                  }}
-                  className="w-full text-left px-3 py-2 text-[12px] text-ink-mid hover:bg-parchment transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <span>⚙️</span> Settings
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    logout();
-                    navigate('/login');
-                  }}
-                  className="w-full text-left px-3 py-2 text-[12px] text-coral hover:bg-parchment transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <span>↗</span> Sign out
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Settings row — shown in mobile drawer (onItemClick provided by MobileDrawer) */}
         {onItemClick && (

@@ -162,16 +162,25 @@ pub async fn check_limit(
                 .unwrap_or(0)
         }
         "media_uploads" => {
-            sqlx::query_scalar("SELECT COUNT(*) FROM media")
-                .fetch_one(pool)
-                .await
-                .unwrap_or(0)
+            sqlx::query_scalar(
+                "SELECT COUNT(*) FROM media m JOIN notes n ON n.id = m.note_id \
+                 WHERE n.workspace_id = $1",
+            )
+            .bind(workspace_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0)
         }
         "storage_bytes" => {
-            sqlx::query_scalar("SELECT COALESCE(SUM(file_size_bytes), 0)::BIGINT FROM media")
-                .fetch_one(pool)
-                .await
-                .unwrap_or(0)
+            sqlx::query_scalar(
+                "SELECT COALESCE(SUM(m.file_size_bytes), 0)::BIGINT \
+                 FROM media m JOIN notes n ON n.id = m.note_id \
+                 WHERE n.workspace_id = $1",
+            )
+            .bind(workspace_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0)
         }
         "map_loads" => {
             let usage = ensure_usage_record(pool, user_id, workspace_id).await?;

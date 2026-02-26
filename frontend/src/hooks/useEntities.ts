@@ -39,6 +39,7 @@ export function useEntity(id: string | null) {
       }
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -54,6 +55,7 @@ export function useEntityNotes(id: string | null) {
       }
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
@@ -110,5 +112,6 @@ export function useEntityTopics(id: string | null) {
       }
     },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }

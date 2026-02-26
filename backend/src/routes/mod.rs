@@ -21,7 +21,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 
-pub fn build_router(pool: PgPool, config: Config) -> Router {
+pub fn build_router(pool: PgPool, config: Config, http_client: reqwest::Client) -> Router {
     Router::new()
         .merge(health::routes())
         .merge(users::routes())
@@ -42,4 +42,5 @@ pub fn build_router(pool: PgPool, config: Config) -> Router {
         .merge(billing::routes())
         .with_state(pool)
         .layer(axum::Extension(config))
+        .layer(axum::Extension(http_client))
 }

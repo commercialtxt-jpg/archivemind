@@ -82,6 +82,9 @@ export default function NoteList({ onNoteSelect }: NoteListProps = {}) {
     else if (sortBy === 'oldest') { f.sort = 'created_at'; f.order = 'asc'; }
     else if (sortBy === 'type') { f.sort = 'note_type'; f.order = 'asc'; }
 
+    // Fetch up to 100 notes — more than enough for a single workspace view
+    f.per_page = 100;
+
     return f;
   }, [sidebarFilter, sortBy]);
 

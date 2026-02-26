@@ -9,6 +9,7 @@ import { useCreateNote } from '../hooks/useNotes';
 import { useEditorStore } from '../stores/editorStore';
 import { useUIStore } from '../stores/uiStore';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import type { NoteType } from '../types';
 
 export default function JournalView() {
   const createNote = useCreateNote();
@@ -19,7 +20,7 @@ export default function JournalView() {
 
   const handleNewNote = () => {
     createNote.mutate(
-      { title: 'Untitled', note_type: 'field_note' } as never,
+      { title: 'Untitled', note_type: 'field_note' as NoteType },
       {
         onSuccess: (note) => {
           if (note?.id) {

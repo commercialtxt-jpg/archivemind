@@ -21,3 +21,19 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
 }
+
+/// Async wrapper for `hash_password` — offloads the CPU-intensive Argon2
+/// computation to a blocking thread pool so the async runtime is not stalled.
+pub async fn hash_password_async(password: String) -> Result<String, AppError> {
+    tokio::task::spawn_blocking(move || hash_password(&password))
+        .await
+        .map_err(|e| AppError::Internal(format!("spawn_blocking error: {}", e)))?
+}
+
+/// Async wrapper for `verify_password` — offloads Argon2 verification to a
+/// blocking thread pool so the async runtime is not stalled.
+pub async fn verify_password_async(password: String, hash: String) -> Result<bool, AppError> {
+    tokio::task::spawn_blocking(move || verify_password(&password, &hash))
+        .await
+        .map_err(|e| AppError::Internal(format!("spawn_blocking error: {}", e)))?
+}

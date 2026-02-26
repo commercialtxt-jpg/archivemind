@@ -164,6 +164,7 @@ fn resolve_provider(config: &Config) -> (&'static str, &str) {
 // ---------------------------------------------------------------------------
 
 async fn ai_status(
+    _auth: AuthUser,
     axum::Extension(config): axum::Extension<Config>,
 ) -> Json<AiStatusResponse> {
     let (provider, _) = resolve_provider(&config);
@@ -183,6 +184,7 @@ async fn summarize(
     auth: AuthUser,
     State(pool): State<PgPool>,
     axum::Extension(config): axum::Extension<Config>,
+    axum::Extension(http_client): axum::Extension<reqwest::Client>,
     Json(body): Json<SummarizeRequest>,
 ) -> Result<Json<ApiResponse<SummarizeResponse>>, AppError> {
     plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "ai_requests").await?;
@@ -212,11 +214,11 @@ async fn summarize(
 
     let (summary, model) = match provider {
         "claude" => {
-            let text = call_claude(api_key, system_prompt, &truncated, 1024).await?;
+            let text = call_claude(&http_client, api_key, system_prompt, &truncated, 1024).await?;
             (text, "claude-sonnet-4-6".to_string())
         }
         _ => {
-            let text = call_perplexity(api_key, "sonar", system_prompt, &truncated).await?;
+            let text = call_perplexity(&http_client, api_key, "sonar", system_prompt, &truncated).await?;
             (text, "sonar".to_string())
         }
     };
@@ -234,6 +236,7 @@ async fn chat(
     auth: AuthUser,
     State(pool): State<PgPool>,
     axum::Extension(config): axum::Extension<Config>,
+    axum::Extension(http_client): axum::Extension<reqwest::Client>,
     Json(body): Json<ChatRequest>,
 ) -> Result<Json<ApiResponse<ChatResponse>>, AppError> {
     plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "ai_requests").await?;
@@ -289,11 +292,11 @@ async fn chat(
 
     let (response_text, model_name) = match provider {
         "claude" => {
-            let text = call_claude_chat(api_key, system_prompt, &history, note_context.as_ref()).await?;
+            let text = call_claude_chat(&http_client, api_key, system_prompt, &history, note_context.as_ref()).await?;
             (text, "claude-sonnet-4-6")
         }
         _ => {
-            let text = call_perplexity_chat(api_key, system_prompt, &history, note_context.as_ref()).await?;
+            let text = call_perplexity_chat(&http_client, api_key, system_prompt, &history, note_context.as_ref()).await?;
             (text, "sonar-pro")
         }
     };
@@ -321,6 +324,7 @@ async fn complete(
     auth: AuthUser,
     State(pool): State<PgPool>,
     axum::Extension(config): axum::Extension<Config>,
+    axum::Extension(http_client): axum::Extension<reqwest::Client>,
     Json(body): Json<CompleteRequest>,
 ) -> Result<Json<ApiResponse<CompleteResponse>>, AppError> {
     plan_guard::check_limit(&pool, auth.user_id, auth.workspace_id, "ai_requests").await?;
@@ -365,8 +369,8 @@ async fn complete(
     let text_to_complete = truncate_text(&body.text, 4000);
 
     let completion = match provider {
-        "claude" => call_claude(api_key, &system_prompt, &text_to_complete, 200).await?,
-        _ => call_perplexity(api_key, "sonar", &system_prompt, &text_to_complete).await?,
+        "claude" => call_claude(&http_client, api_key, &system_prompt, &text_to_complete, 200).await?,
+        _ => call_perplexity(&http_client, api_key, "sonar", &system_prompt, &text_to_complete).await?,
     };
 
     plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "ai_requests", 1).await?;
@@ -683,13 +687,12 @@ struct ClaudeContent {
 }
 
 async fn call_claude(
+    client: &reqwest::Client,
     api_key: &str,
     system: &str,
     user_message: &str,
     max_tokens: u32,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
-
     let request = ClaudeRequest {
         model: "claude-sonnet-4-6".to_string(),
         max_tokens,
@@ -732,12 +735,12 @@ async fn call_claude(
 }
 
 async fn call_claude_chat(
+    client: &reqwest::Client,
     api_key: &str,
     system_prompt: &str,
     history: &[ai::AiMessage],
     note_context: Option<&NoteContent>,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
 
     let system = if let Some(note) = note_context {
         format!(
@@ -832,12 +835,12 @@ struct PerplexityChoiceMessage {
 }
 
 async fn call_perplexity(
+    client: &reqwest::Client,
     api_key: &str,
     model: &str,
     system: &str,
     user_message: &str,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
 
     let request = PerplexityRequest {
         model: model.to_string(),
@@ -885,12 +888,12 @@ async fn call_perplexity(
 }
 
 async fn call_perplexity_chat(
+    client: &reqwest::Client,
     api_key: &str,
     system_prompt: &str,
     history: &[ai::AiMessage],
     note_context: Option<&NoteContent>,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
 
     let mut messages = vec![PerplexityMessage {
         role: "system".to_string(),
@@ -960,7 +963,12 @@ async fn call_perplexity_chat(
 
 fn truncate_text(text: &str, max_len: usize) -> String {
     if text.len() > max_len {
-        format!("{}...", &text[..max_len])
+        // Walk backward from max_len to find a valid UTF-8 char boundary
+        let mut end = max_len;
+        while !text.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        format!("{}...", &text[..end])
     } else {
         text.to_string()
     }

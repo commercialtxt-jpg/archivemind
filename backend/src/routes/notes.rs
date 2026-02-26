@@ -750,14 +750,18 @@ async fn note_connections(
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Vec<ConnectedNote>>>, AppError> {
-    // Verify note belongs to workspace
-    let _exists: bool = sqlx::query_scalar(
+    // Verify note belongs to workspace — fail with 404 if not found or wrong workspace
+    let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1 AND workspace_id = $2)",
     )
     .bind(id)
     .bind(auth.workspace_id)
     .fetch_one(&pool)
     .await?;
+
+    if !exists {
+        return Err(AppError::NotFound("Note not found".into()));
+    }
 
     let connected = sqlx::query_as::<_, ConnectedNote>(
         "SELECT n.id, n.title, n.note_type::text, ge.strength, ge.label \
@@ -767,10 +771,12 @@ async fn note_connections(
              OR (ge.source_type = 'note' AND ge.source_id = n.id)\
          ) \
          WHERE (ge.source_id = $1 OR ge.target_id = $1) \
-           AND n.id != $1 AND n.deleted_at IS NULL \
+           AND ge.workspace_id = $2 \
+           AND n.id != $1 AND n.deleted_at IS NULL AND n.workspace_id = $2 \
          ORDER BY ge.strength DESC",
     )
     .bind(id)
+    .bind(auth.workspace_id)
     .fetch_all(&pool)
     .await?;
 

@@ -10,12 +10,14 @@ mod seed;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::http::StatusCode;
+use axum::extract::DefaultBodyLimit;
+use axum::http::{header, HeaderValue, StatusCode};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -92,6 +94,12 @@ async fn main() {
     // Keep a clone for the graceful-shutdown pool drain (PgPool is Arc-backed).
     let pool_shutdown = pool.clone();
 
+    // Shared HTTP client for outbound AI API calls (avoids re-creating per request)
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .expect("Failed to create HTTP client");
+
     // --- 3.4 Rate limiting ---
     // 10 requests/second sustained, burst of 30.
     // Uses PeerIpKeyExtractor by default, which requires connect_info.
@@ -103,13 +111,16 @@ async fn main() {
             .unwrap(),
     );
 
+    let cors_origin = config
+        .cors_origin
+        .parse::<HeaderValue>()
+        .unwrap_or_else(|e| {
+            tracing::warn!("Invalid CORS_ORIGIN '{}': {}; defaulting to localhost:5173", config.cors_origin, e);
+            HeaderValue::from_static("http://localhost:5173")
+        });
+
     let cors = CorsLayer::new()
-        .allow_origin(
-            config
-                .cors_origin
-                .parse::<axum::http::HeaderValue>()
-                .unwrap(),
-        )
+        .allow_origin(cors_origin)
         .allow_methods(Any)
         .allow_headers(Any);
 
@@ -123,8 +134,23 @@ async fn main() {
         ))
         .layer(TimeoutLayer::new(std::time::Duration::from_secs(30)));
 
-    // Layer order (bottom-up evaluation): TraceLayer → timeout → governor → cors → correlation_id → router
-    let app = routes::build_router(pool, config.clone())
+    // Layer order (bottom-up evaluation): TraceLayer → timeout → governor → cors → correlation_id → security headers → body limit → router
+    let app = routes::build_router(pool, config.clone(), http_client)
+        // --- Body size limit (50 MB) ---
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
+        // --- Security response headers ---
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::HeaderName::from_static("referrer-policy"),
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
         // --- 3.5 Correlation ID ---
         .layer(axum::middleware::from_fn(
             crate::middleware::correlation_id::correlation_id,
@@ -139,7 +165,12 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("Server listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to bind to {}: {}", addr, e);
+            std::process::exit(1);
+        });
 
     // --- 3.2 Graceful shutdown ---
     // GovernorLayer's PeerIpKeyExtractor needs connect_info to read the client IP.

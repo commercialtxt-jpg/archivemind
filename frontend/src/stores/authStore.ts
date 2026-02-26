@@ -71,6 +71,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     const userStr = localStorage.getItem('user');
     if (token && userStr) {
       try {
+        // Decode JWT payload to check expiry
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          // Token expired, clear storage
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          return;
+        }
         const user = JSON.parse(userStr) as User;
         set({ token, user, isAuthenticated: true });
       } catch {

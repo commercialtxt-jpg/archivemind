@@ -97,8 +97,9 @@ fn tier_to_variant(tier: &str) -> Option<i64> {
 /// Verify the HMAC-SHA256 signature from LemonSqueezy's `X-Signature` header.
 fn verify_signature(secret: &str, body: &[u8], signature: &str) -> bool {
     if secret.is_empty() {
-        // No secret configured — skip verification in dev
-        return true;
+        // No secret configured — fail closed to prevent accepting unauthenticated webhooks
+        tracing::warn!("LEMONSQUEEZY_WEBHOOK_SECRET is not set; rejecting all webhook requests");
+        return false;
     }
     let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
         return false;

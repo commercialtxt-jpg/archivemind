@@ -94,6 +94,14 @@ async fn upload_media(
         })
         .to_string();
 
+    // Validate file type against allow-list
+    const ALLOWED_EXTENSIONS: &[&str] = &[
+        "jpg", "jpeg", "png", "gif", "webp", "webm", "mp3", "wav", "ogg", "mp4", "m4a", "pdf",
+    ];
+    if !ALLOWED_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
+        return Err(AppError::BadRequest("File type not allowed".into()));
+    }
+
     // Build storage path
     let workspace_id = auth.workspace_id;
     let file_id = Uuid::new_v4();
@@ -143,17 +151,20 @@ async fn upload_media(
 // GET /api/v1/media/:id/file — serve the file (supports Range for audio)
 // ---------------------------------------------------------------------------
 async fn serve_file(
+    auth: AuthUser,
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, HeaderMap, Body), AppError> {
     let record = sqlx::query_as::<_, Media>(
-        "SELECT id, note_id, media_type::text, s3_key, original_filename, mime_type, \
-         file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at \
-         FROM media WHERE id = $1",
+        "SELECT m.id, m.note_id, m.media_type::text, m.s3_key, m.original_filename, m.mime_type, \
+         m.file_size_bytes, m.duration_seconds, m.thumbnail_s3_key, m.label, \
+         m.transcription_status::text, m.transcription_text, m.sort_order, m.created_at \
+         FROM media m JOIN notes n ON n.id = m.note_id \
+         WHERE m.id = $1 AND n.workspace_id = $2",
     )
     .bind(id)
+    .bind(auth.workspace_id)
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Media not found".to_string()))?;
@@ -254,37 +265,38 @@ struct ListMediaQuery {
 }
 
 async fn list_media(
-    _auth: AuthUser,
+    auth: AuthUser,
     State(pool): State<PgPool>,
     Query(params): Query<ListMediaQuery>,
 ) -> Result<Json<ApiResponse<Vec<Media>>>, AppError> {
-    // Build WHERE clause dynamically
-    let mut conditions: Vec<String> = Vec::new();
-    let mut bind_idx = 1usize;
+    // Base join ensures workspace isolation: only media whose note belongs to
+    // the authenticated user's workspace is ever returned.
+    // $1 is always auth.workspace_id; additional params are appended after it.
+    let mut conditions: Vec<String> = vec!["n.workspace_id = $1".to_string()];
+    let mut bind_idx = 2usize;
 
     if params.note_id.is_some() {
-        conditions.push(format!("note_id = ${bind_idx}"));
+        conditions.push(format!("m.note_id = ${bind_idx}"));
         bind_idx += 1;
     }
     if params.media_type.is_some() {
-        conditions.push(format!("media_type::text = ${bind_idx}"));
-        // bind_idx += 1; -- would be used if more params follow
+        conditions.push(format!("m.media_type::text = ${bind_idx}"));
+        // bind_idx += 1; -- would be used if more conditions follow
+        let _ = bind_idx; // suppress unused warning
     }
 
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
+    let where_clause = format!("WHERE {}", conditions.join(" AND "));
 
     let sql = format!(
-        "SELECT id, note_id, media_type::text, s3_key, original_filename, mime_type, \
-         file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at \
-         FROM media {where_clause} ORDER BY sort_order ASC, created_at ASC"
+        "SELECT m.id, m.note_id, m.media_type::text, m.s3_key, m.original_filename, m.mime_type, \
+         m.file_size_bytes, m.duration_seconds, m.thumbnail_s3_key, m.label, \
+         m.transcription_status::text, m.transcription_text, m.sort_order, m.created_at \
+         FROM media m JOIN notes n ON n.id = m.note_id \
+         {where_clause} ORDER BY m.sort_order ASC, m.created_at ASC"
     );
 
     let mut query = sqlx::query_as::<_, Media>(&sql);
+    query = query.bind(auth.workspace_id);
     if let Some(nid) = params.note_id {
         query = query.bind(nid);
     }
@@ -302,17 +314,19 @@ async fn list_media(
 // GET /api/v1/media/:id — get single media record
 // ---------------------------------------------------------------------------
 async fn get_media(
-    _auth: AuthUser,
+    auth: AuthUser,
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<Media>>, AppError> {
     let media = sqlx::query_as::<_, Media>(
-        "SELECT id, note_id, media_type::text, s3_key, original_filename, mime_type, \
-         file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at \
-         FROM media WHERE id = $1",
+        "SELECT m.id, m.note_id, m.media_type::text, m.s3_key, m.original_filename, m.mime_type, \
+         m.file_size_bytes, m.duration_seconds, m.thumbnail_s3_key, m.label, \
+         m.transcription_status::text, m.transcription_text, m.sort_order, m.created_at \
+         FROM media m JOIN notes n ON n.id = m.note_id \
+         WHERE m.id = $1 AND n.workspace_id = $2",
     )
     .bind(id)
+    .bind(auth.workspace_id)
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Media not found".to_string()))?;
@@ -324,18 +338,20 @@ async fn get_media(
 // DELETE /api/v1/media/:id — delete file + DB record
 // ---------------------------------------------------------------------------
 async fn delete_media(
-    _auth: AuthUser,
+    auth: AuthUser,
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    // Fetch s3_key first so we can delete the file
+    // Fetch s3_key first so we can delete the file; scope to workspace to prevent IDOR
     let record = sqlx::query_as::<_, Media>(
-        "SELECT id, note_id, media_type::text, s3_key, original_filename, mime_type, \
-         file_size_bytes, duration_seconds, thumbnail_s3_key, label, \
-         transcription_status::text, transcription_text, sort_order, created_at \
-         FROM media WHERE id = $1",
+        "SELECT m.id, m.note_id, m.media_type::text, m.s3_key, m.original_filename, m.mime_type, \
+         m.file_size_bytes, m.duration_seconds, m.thumbnail_s3_key, m.label, \
+         m.transcription_status::text, m.transcription_text, m.sort_order, m.created_at \
+         FROM media m JOIN notes n ON n.id = m.note_id \
+         WHERE m.id = $1 AND n.workspace_id = $2",
     )
     .bind(id)
+    .bind(auth.workspace_id)
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Media not found".to_string()))?;
@@ -357,11 +373,27 @@ async fn delete_media(
 // PUT /api/v1/media/:id/transcription — update transcription
 // ---------------------------------------------------------------------------
 async fn update_transcription(
-    _auth: AuthUser,
+    auth: AuthUser,
     State(pool): State<PgPool>,
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateTranscription>,
 ) -> Result<Json<ApiResponse<Media>>, AppError> {
+    // Verify ownership before updating
+    let _exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(\
+             SELECT 1 FROM media m JOIN notes n ON n.id = m.note_id \
+             WHERE m.id = $1 AND n.workspace_id = $2\
+         )",
+    )
+    .bind(id)
+    .bind(auth.workspace_id)
+    .fetch_one(&pool)
+    .await?;
+
+    if !_exists {
+        return Err(AppError::NotFound("Media not found".to_string()));
+    }
+
     let media = sqlx::query_as::<_, Media>(
         "UPDATE media SET \
          transcription_status = $2::transcription_status, \

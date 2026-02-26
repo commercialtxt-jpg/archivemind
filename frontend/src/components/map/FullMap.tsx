@@ -166,28 +166,39 @@ export default function FullMap() {
       const color = pinColor(loc);
       const size  = pinSize(loc);
 
-      // Build a custom HTML element for the marker
+      // Build a custom HTML element for the marker.
+      // Mapbox applies `transform: translate(...)` on the outer element for
+      // positioning, so we must NOT set `transform` on it. Instead we nest
+      // the visual pin inside and apply hover scale there.
       const el = document.createElement('div');
       el.style.cssText = `
         width: ${size}px;
         height: ${size}px;
+        cursor: pointer;
+      `;
+
+      const pin = document.createElement('div');
+      pin.style.cssText = `
+        width: 100%;
+        height: 100%;
         border-radius: 50%;
         background: ${color};
         border: 2px solid white;
         box-shadow: 0 2px 6px rgba(0,0,0,0.28);
-        cursor: pointer;
         transition: transform 0.15s, box-shadow 0.15s;
         display: flex;
         align-items: center;
         justify-content: center;
       `;
+      el.appendChild(pin);
+
       el.addEventListener('mouseenter', () => {
-        el.style.transform = 'scale(1.25)';
-        el.style.boxShadow = `0 4px 12px rgba(0,0,0,0.35)`;
+        pin.style.transform = 'scale(1.25)';
+        pin.style.boxShadow = '0 4px 12px rgba(0,0,0,0.35)';
       });
       el.addEventListener('mouseleave', () => {
-        el.style.transform = 'scale(1)';
-        el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.28)';
+        pin.style.transform = 'scale(1)';
+        pin.style.boxShadow = '0 2px 6px rgba(0,0,0,0.28)';
       });
 
       // Note count badge
@@ -201,7 +212,7 @@ export default function FullMap() {
           font-family: 'DM Sans', sans-serif;
           line-height: 1;
         `;
-        el.appendChild(badge);
+        pin.appendChild(badge);
       }
 
       const popup = new mapboxgl.Popup({
@@ -503,9 +514,36 @@ function PopupStyles() {
         padding: 12px 14px;
         min-width: 160px;
       }
+
+      /*
+       * Tailwind v4 preflight resets border on * to "border: 0 solid", which
+       * collapses the CSS-triangle tip (it relies on border-width: 10px).
+       * Restore the Mapbox tip border for all anchor directions with !important
+       * so the triangle renders and the popup height is measured correctly by
+       * _getAnchor(), preventing popups from jumping to wrong screen positions.
+       */
       .archivemind-popup .mapboxgl-popup-tip {
-        border-top-color: rgba(250,247,242,0.97);
+        border: 10px solid transparent !important;
       }
+
+      /* Anchor-specific tip colours — one per anchor direction. */
+      .archivemind-popup.mapboxgl-popup-anchor-bottom      .mapboxgl-popup-tip,
+      .archivemind-popup.mapboxgl-popup-anchor-bottom-left  .mapboxgl-popup-tip,
+      .archivemind-popup.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip {
+        border-top-color: rgba(250,247,242,0.97) !important;
+      }
+      .archivemind-popup.mapboxgl-popup-anchor-top       .mapboxgl-popup-tip,
+      .archivemind-popup.mapboxgl-popup-anchor-top-left  .mapboxgl-popup-tip,
+      .archivemind-popup.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip {
+        border-bottom-color: rgba(250,247,242,0.97) !important;
+      }
+      .archivemind-popup.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+        border-right-color: rgba(250,247,242,0.97) !important;
+      }
+      .archivemind-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+        border-left-color: rgba(250,247,242,0.97) !important;
+      }
+
       .archivemind-popup .mapboxgl-popup-close-button {
         color: #9A8B82;
         font-size: 16px;

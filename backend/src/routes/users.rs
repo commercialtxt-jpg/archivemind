@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::auth::jwt::create_token;
 use crate::auth::middleware::AuthUser;
-use crate::auth::password::{hash_password, verify_password};
+use crate::auth::password::{hash_password_async, verify_password_async};
 use crate::config::Config;
 use crate::error::AppError;
 use crate::models::user::{AuthResponse, LoginRequest, RegisterRequest, User, UserProfile};
@@ -27,7 +27,7 @@ async fn register(
         ));
     }
 
-    let password_hash = hash_password(&body.password)?;
+    let password_hash = hash_password_async(body.password.clone()).await?;
 
     let initials: String = body
         .display_name
@@ -105,7 +105,7 @@ async fn login(
         .await?
         .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
 
-    if !verify_password(&body.password, &user.password_hash)? {
+    if !verify_password_async(body.password.clone(), user.password_hash.clone()).await? {
         return Err(AppError::Unauthorized(
             "Invalid email or password".to_string(),
         ));
