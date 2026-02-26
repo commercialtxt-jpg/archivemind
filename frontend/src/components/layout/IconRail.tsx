@@ -39,7 +39,10 @@ export default function IconRail() {
     },
   });
 
-  const activeView = navItems.find((n) => location.pathname.startsWith(n.route))?.view || 'journal';
+  const isOnSettings = location.pathname.startsWith('/settings');
+  const activeView = isOnSettings
+    ? null
+    : navItems.find((n) => location.pathname.startsWith(n.route))?.view || 'journal';
   const hasInventoryAlert = (alert?.count ?? 0) > 0;
 
   const handleLogout = () => {
@@ -85,7 +88,7 @@ export default function IconRail() {
       <div className="mt-auto mb-2">
         <Tooltip text="Settings" position="right">
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate(isOnSettings ? '/journal' : '/settings')}
             aria-label="Settings"
             aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined}
             className={`
