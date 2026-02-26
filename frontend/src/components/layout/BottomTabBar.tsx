@@ -22,6 +22,8 @@ export default function BottomTabBar() {
 
   const isActive = (route: string | null) => {
     if (!route) return false;
+    // Never highlight a regular tab when on settings
+    if (pathname.startsWith('/settings')) return false;
     if (route === '/journal') return pathname === '/' || pathname.startsWith('/journal');
     return pathname.startsWith(route);
   };

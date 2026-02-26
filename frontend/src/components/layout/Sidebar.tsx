@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useNoteCounts } from '../../hooks/useNotes';
 import { useFieldTrips, useCreateFieldTrip, useDeleteFieldTrip } from '../../hooks/useFieldTrips';
@@ -20,6 +20,7 @@ interface SidebarContentProps {
 
 export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { sidebarFilter, setSidebarFilter, setSearchQuery } = useUIStore();
   const { data: counts } = useNoteCounts();
   const [search, setSearch] = useState('');
@@ -320,8 +321,36 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
         </section>
       </div>
 
-      {/* Footer: Sync status */}
+      {/* Footer: Settings (mobile drawer only) + Sync status */}
       <div className="border-t border-border-light">
+        {/* Settings row — only shown in mobile drawer (onItemClick is provided by MobileDrawer) */}
+        {onItemClick && (
+          <button
+            onClick={() => {
+              if (pathname.startsWith('/settings')) {
+                // Toggle off: go back to journal
+                navigate('/journal');
+              } else {
+                navigate('/settings');
+              }
+              onItemClick();
+            }}
+            className={`
+              flex items-center w-full gap-2 px-4 py-[10px] text-[13px] transition-all duration-150 cursor-pointer
+              ${pathname.startsWith('/settings')
+                ? 'bg-white/80 text-coral font-medium'
+                : 'text-ink-mid hover:bg-white/60'
+              }
+            `}
+            aria-current={pathname.startsWith('/settings') ? 'page' : undefined}
+          >
+            <span className="w-5 text-center text-sm">⚙️</span>
+            <span className="flex-1 text-left">Settings</span>
+            {pathname.startsWith('/settings') && (
+              <span className="text-[10px] text-ink-muted">tap to close</span>
+            )}
+          </button>
+        )}
         <SyncStatus />
       </div>
     </>
