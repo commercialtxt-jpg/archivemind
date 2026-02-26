@@ -73,14 +73,42 @@ pub async fn check_limit(
         )));
     }
 
-    let usage = ensure_usage_record(pool, user_id, workspace_id).await?;
-
+    // For cumulative resources (notes, entities, media, storage), use live DB counts
+    // so pre-existing data counts against the limit. For rate-based resources (map_loads),
+    // use the tracking table.
     let current: i64 = match resource {
-        "notes" => usage.notes_count as i64,
-        "entities" => usage.entities_count as i64,
-        "media_uploads" => usage.media_uploads as i64,
-        "map_loads" => usage.map_loads as i64,
-        "storage_bytes" => usage.storage_bytes,
+        "notes" => {
+            sqlx::query_scalar(
+                "SELECT COUNT(*) FROM notes WHERE workspace_id = $1 AND deleted_at IS NULL",
+            )
+            .bind(workspace_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0)
+        }
+        "entities" => {
+            sqlx::query_scalar("SELECT COUNT(*) FROM entities WHERE workspace_id = $1")
+                .bind(workspace_id)
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0)
+        }
+        "media_uploads" => {
+            sqlx::query_scalar("SELECT COUNT(*) FROM media")
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0)
+        }
+        "storage_bytes" => {
+            sqlx::query_scalar("SELECT COALESCE(SUM(file_size_bytes), 0)::BIGINT FROM media")
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0)
+        }
+        "map_loads" => {
+            let usage = ensure_usage_record(pool, user_id, workspace_id).await?;
+            usage.map_loads as i64
+        }
         _ => 0,
     };
 

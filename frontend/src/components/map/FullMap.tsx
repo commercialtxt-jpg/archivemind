@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { useNavigate } from 'react-router-dom';
-import { useMapLocations } from '../../hooks/useMap';
+import { useMapLocations, useTrackMapLoad } from '../../hooks/useMap';
 import { useEditorStore } from '../../stores/editorStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useUpdateNote } from '../../hooks/useNotes';
@@ -69,6 +69,7 @@ interface Toast {
 
 export default function FullMap() {
   const { data: locations = [], isLoading } = useMapLocations();
+  const trackMapLoad = useTrackMapLoad();
   const navigate = useNavigate();
   const activeNoteId = useEditorStore((s) => s.activeNoteId);
   const setActiveNoteId = useEditorStore((s) => s.setActiveNoteId);
@@ -114,6 +115,8 @@ export default function FullMap() {
       // from Journal where the sidebar was visible, changing <main> width).
       map.resize();
       setMapReady(true);
+      // Track this Mapbox initialization for usage billing
+      trackMapLoad();
     });
 
     // Also resize whenever the container element itself changes size — this

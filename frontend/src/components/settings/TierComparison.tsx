@@ -21,7 +21,7 @@ interface TierColumn {
 const tiers: TierColumn[] = [
   {
     tier: 'free', name: 'Free', price: '$0', mapLoads: '50', storage: '100 MB',
-    notes: '50', entities: '25', mediaUploads: '20', ai: '—',
+    notes: '50', entities: '25', mediaUploads: '50', ai: '—',
     workspaces: '1', teamMembers: '1',
   },
   {

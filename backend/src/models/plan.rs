@@ -51,7 +51,7 @@ impl PlanLimits {
                 storage_bytes: 100 * 1024 * 1024, // 100 MB
                 notes: 50,
                 entities: 25,
-                media_uploads: 20,
+                media_uploads: 50,
                 ai_requests: 0,
                 workspaces: 1,
                 team_members: 1,

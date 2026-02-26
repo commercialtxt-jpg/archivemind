@@ -1,4 +1,4 @@
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{extract::State, http::StatusCode, routing::{get, post}, Json, Router};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -117,8 +117,9 @@ async fn map_locations(
     auth: AuthUser,
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<MapLocation>>>, AppError> {
-    // Increment map loads counter (best-effort, don't block on limit)
-    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "map_loads", 1).await;
+    // Map loads are tracked separately via POST /api/v1/map/track-load (fired
+    // on every Mapbox GL init in the frontend).  We no longer increment here
+    // because this endpoint is cached by TanStack Query and under-counts.
 
     let mut locations: Vec<MapLocation> = Vec::new();
 
@@ -196,9 +197,23 @@ async fn map_locations(
 }
 
 // ---------------------------------------------------------------------------
+// POST /api/v1/map/track-load — called by the frontend on every Mapbox init
+// ---------------------------------------------------------------------------
+
+async fn track_map_load(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+) -> Result<StatusCode, AppError> {
+    let _ = plan_guard::increment_usage(&pool, auth.user_id, auth.workspace_id, "map_loads", 1).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
 pub fn routes() -> Router<PgPool> {
-    Router::new().route("/api/v1/map/locations", get(map_locations))
+    Router::new()
+        .route("/api/v1/map/locations", get(map_locations))
+        .route("/api/v1/map/track-load", post(track_map_load))
 }

@@ -27,7 +27,7 @@ async fn get_usage(
     let now = Utc::now().naive_utc().date();
     let period = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
 
-    let usage = sqlx::query_as::<_, UsageRecord>(
+    let mut usage = sqlx::query_as::<_, UsageRecord>(
         "INSERT INTO usage_tracking (user_id, workspace_id, period_start) \
          VALUES ($1, $2, $3) \
          ON CONFLICT (user_id, period_start) DO UPDATE SET updated_at = now() \
@@ -38,6 +38,39 @@ async fn get_usage(
     .bind(period)
     .fetch_one(&pool)
     .await?;
+
+    // Override with live counts so pre-existing data is reflected
+    let notes_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notes WHERE workspace_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(auth.workspace_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(0);
+
+    let entities_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM entities WHERE workspace_id = $1",
+    )
+    .bind(auth.workspace_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(0);
+
+    let media_uploads: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(0);
+
+    let storage_bytes: i64 =
+        sqlx::query_scalar("SELECT COALESCE(SUM(file_size_bytes), 0)::BIGINT FROM media")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or(0);
+
+    usage.notes_count = usage.notes_count.max(notes_count as i32);
+    usage.entities_count = usage.entities_count.max(entities_count as i32);
+    usage.media_uploads = usage.media_uploads.max(media_uploads as i32);
+    usage.storage_bytes = usage.storage_bytes.max(storage_bytes);
 
     Ok(ApiResponse::ok(UsageResponse {
         plan: tier,

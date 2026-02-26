@@ -114,8 +114,15 @@ export default function EditorToolbar({
       try {
         await uploadMedia.mutateAsync({ file, noteId: note.id, mediaType: 'audio' });
         showToast('Recording saved');
-      } catch {
-        showToast('Upload failed — recording lost');
+      } catch (err: unknown) {
+        const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
+        if (axiosErr?.response?.status === 403) {
+          const msg = axiosErr.response.data?.error || 'Plan limit reached';
+          showToast(msg);
+          window.dispatchEvent(new CustomEvent('plan-limit-error', { detail: { resource: 'media_uploads', message: msg } }));
+        } else {
+          showToast('Upload failed — recording lost');
+        }
       }
       return;
     }

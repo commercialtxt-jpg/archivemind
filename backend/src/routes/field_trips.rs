@@ -17,9 +17,10 @@ async fn list_field_trips(
 ) -> Result<Json<ApiResponse<Vec<FieldTripWithCount>>>, AppError> {
     let trips = sqlx::query_as::<_, FieldTripWithCount>(
         "SELECT ft.id, ft.workspace_id, ft.name, ft.icon, ft.created_at, ft.updated_at, \
-         COUNT(nft.note_id) AS note_count \
+         COUNT(nft.note_id) FILTER (WHERE n.deleted_at IS NULL) AS note_count \
          FROM field_trips ft \
          LEFT JOIN note_field_trips nft ON nft.field_trip_id = ft.id \
+         LEFT JOIN notes n ON n.id = nft.note_id \
          WHERE ft.workspace_id = $1 \
          GROUP BY ft.id \
          ORDER BY ft.created_at DESC",

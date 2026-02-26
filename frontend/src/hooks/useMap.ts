@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import api from '../lib/api';
 import type { ApiResponse, MapLocation } from '../types';
 
@@ -15,4 +16,11 @@ export function useMapLocations() {
     },
     staleTime: 60_000,
   });
+}
+
+/** Fire-and-forget call to track a Mapbox map initialization. */
+export function useTrackMapLoad() {
+  return useCallback(() => {
+    api.post('/map/track-load').catch(() => {});
+  }, []);
 }

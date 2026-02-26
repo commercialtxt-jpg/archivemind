@@ -9,6 +9,47 @@ use crate::models::plan::*;
 use crate::models::user::{User, UserProfile};
 use crate::response::ApiResponse;
 
+/// Compute live resource counts from actual tables (not the incremental tracker).
+async fn live_counts(pool: &PgPool, workspace_id: uuid::Uuid) -> Result<LiveCounts, AppError> {
+    let notes_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notes WHERE workspace_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(workspace_id)
+    .fetch_one(pool)
+    .await?;
+
+    let entities_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM entities WHERE workspace_id = $1",
+    )
+    .bind(workspace_id)
+    .fetch_one(pool)
+    .await?;
+
+    let media_uploads: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media")
+        .fetch_one(pool)
+        .await?;
+
+    let storage_bytes: i64 =
+        sqlx::query_scalar("SELECT COALESCE(SUM(file_size_bytes), 0)::BIGINT FROM media")
+            .fetch_one(pool)
+            .await?;
+
+    Ok(LiveCounts {
+        notes_count: notes_count as i32,
+        entities_count: entities_count as i32,
+        media_uploads: media_uploads as i32,
+        storage_bytes,
+    })
+}
+
+#[derive(Debug)]
+struct LiveCounts {
+    notes_count: i32,
+    entities_count: i32,
+    media_uploads: i32,
+    storage_bytes: i64,
+}
+
 /// GET /api/v1/settings/plan — current plan details, limits, and usage summary
 async fn get_plan(
     auth: AuthUser,
@@ -27,7 +68,8 @@ async fn get_plan(
     let now = chrono::Utc::now().naive_utc().date();
     let period = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
 
-    let usage = sqlx::query_as::<_, UsageRecord>(
+    // Get or create tracking record for this period
+    let mut usage = sqlx::query_as::<_, UsageRecord>(
         "INSERT INTO usage_tracking (user_id, workspace_id, period_start) \
          VALUES ($1, $2, $3) \
          ON CONFLICT (user_id, period_start) DO UPDATE SET updated_at = now() \
@@ -38,6 +80,13 @@ async fn get_plan(
     .bind(period)
     .fetch_one(&pool)
     .await?;
+
+    // Override with live counts so pre-existing data is reflected
+    let live = live_counts(&pool, auth.workspace_id).await?;
+    usage.notes_count = usage.notes_count.max(live.notes_count);
+    usage.entities_count = usage.entities_count.max(live.entities_count);
+    usage.media_uploads = usage.media_uploads.max(live.media_uploads);
+    usage.storage_bytes = usage.storage_bytes.max(live.storage_bytes);
 
     Ok(ApiResponse::ok(UsageResponse {
         plan: tier,

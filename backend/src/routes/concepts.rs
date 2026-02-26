@@ -17,9 +17,10 @@ async fn list_concepts(
 ) -> Result<Json<ApiResponse<Vec<ConceptWithCount>>>, AppError> {
     let concepts = sqlx::query_as::<_, ConceptWithCount>(
         "SELECT c.id, c.workspace_id, c.name, c.category, c.icon, c.created_at, c.updated_at, \
-         COUNT(nc.note_id) AS note_count \
+         COUNT(nc.note_id) FILTER (WHERE n.deleted_at IS NULL) AS note_count \
          FROM concepts c \
          LEFT JOIN note_concepts nc ON nc.concept_id = c.id \
+         LEFT JOIN notes n ON n.id = nc.note_id \
          WHERE c.workspace_id = $1 \
          GROUP BY c.id \
          ORDER BY c.name ASC",

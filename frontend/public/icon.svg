@@ -1,31 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="leafGrad" x1="0.5" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#D87A5C"/>
-      <stop offset="100%" stop-color="#CF6A4C"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#CF6A4C"/>
+      <stop offset="100%" stop-color="#C4844A"/>
     </linearGradient>
   </defs>
-
-  <!-- Bold "A" monogram — thick geometric strokes -->
-  <path d="M96 448L224 64H288L416 448H344L308 352H204L168 448Z" fill="#2A2420"/>
-
-  <!-- Left leaf of crossbar sprig -->
-  <path d="M256 258C228 248 192 268 184 296C200 302 234 290 256 258Z" fill="url(#leafGrad)"/>
-  <!-- Right leaf of crossbar sprig -->
-  <path d="M256 258C284 248 320 268 328 296C312 302 278 290 256 258Z" fill="url(#leafGrad)"/>
-
-  <!-- Left leaf midrib vein -->
-  <path d="M256 258C236 264 214 276 200 288" fill="none" stroke="#2A2420" stroke-width="2" opacity="0.15" stroke-linecap="round"/>
-  <!-- Right leaf midrib vein -->
-  <path d="M256 258C276 264 298 276 312 288" fill="none" stroke="#2A2420" stroke-width="2" opacity="0.15" stroke-linecap="round"/>
-
-  <!-- Subtle secondary veins — left -->
-  <path d="M240 266C232 272 222 276 214 278" fill="none" stroke="#2A2420" stroke-width="1.2" opacity="0.08" stroke-linecap="round"/>
-  <path d="M232 272C226 280 218 286 212 290" fill="none" stroke="#2A2420" stroke-width="1.2" opacity="0.08" stroke-linecap="round"/>
-  <!-- Subtle secondary veins — right -->
-  <path d="M272 266C280 272 290 276 298 278" fill="none" stroke="#2A2420" stroke-width="1.2" opacity="0.08" stroke-linecap="round"/>
-  <path d="M280 272C286 280 294 286 300 290" fill="none" stroke="#2A2420" stroke-width="1.2" opacity="0.08" stroke-linecap="round"/>
-
-  <!-- Tiny stem connecting leaves -->
-  <path d="M256 258L256 270" stroke="#CF6A4C" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <!-- Rounded square background -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <!-- Cream "A" letterform -->
+  <path d="M256 96L144 416H200L224 344H288L312 416H368L256 96Z" fill="#FAF7F2"/>
+  <!-- Counter (hole in A) -->
+  <path d="M237 296L256 224L275 296Z" fill="#CF6A4C"/>
 </svg>
