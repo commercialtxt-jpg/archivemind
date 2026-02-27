@@ -14,7 +14,9 @@ use crate::response::ApiResponse;
 #[derive(Debug, Deserialize)]
 pub struct SearchParams {
     pub q: String,
+    #[allow(dead_code)]
     pub page: Option<i64>,
+    #[allow(dead_code)]
     pub per_page: Option<i64>,
 }
 

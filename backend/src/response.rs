@@ -35,6 +35,7 @@ impl<T: Serialize> ApiResponse<T> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PaginationParams {
     pub page: Option<i64>,
     pub per_page: Option<i64>,

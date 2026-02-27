@@ -62,7 +62,7 @@ export default function LoginPage() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               required
-              className="w-full px-3 py-2 text-sm bg-parchment border border-border rounded-lg
+              className="w-full px-3 py-2 text-base bg-parchment border border-border rounded-lg
                 focus:bg-white focus:border-coral focus:ring-3 focus:ring-glow-coral outline-none"
             />
           )}
@@ -74,7 +74,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
-            className="w-full px-3 py-2 text-sm bg-parchment border border-border rounded-lg
+            className="w-full px-3 py-2 text-base bg-parchment border border-border rounded-lg
               focus:bg-white focus:border-coral focus:ring-3 focus:ring-glow-coral outline-none"
           />
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete={isRegister ? 'new-password' : 'current-password'}
-            className="w-full px-3 py-2 text-sm bg-parchment border border-border rounded-lg
+            className="w-full px-3 py-2 text-base bg-parchment border border-border rounded-lg
               focus:bg-white focus:border-coral focus:ring-3 focus:ring-glow-coral outline-none"
           />
 
@@ -96,7 +96,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-coral text-white font-medium text-sm rounded-lg
+            className="w-full py-2.5 bg-coral text-white font-medium text-base rounded-lg
               hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
           >
             {loading ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}

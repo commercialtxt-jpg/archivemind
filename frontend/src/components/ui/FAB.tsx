@@ -27,12 +27,16 @@ export default function FAB({ onNewNote, isCreating, onQuickCapture }: FABProps)
     window.dispatchEvent(new CustomEvent('archivemind:start-recording'));
   };
 
+  // On mobile, clear the BottomTabBar (h-16 = 64px) + safe area + breathing room
   const positionClass = isMobile
-    ? 'bottom-20 right-4'
+    ? 'right-4'
     : 'bottom-7 right-[320px]';
 
   return (
-    <div className={`fixed ${positionClass} flex items-center gap-2 z-30 animate-slide-up`}>
+    <div
+      className={`fixed ${positionClass} flex items-center gap-2 z-30 animate-slide-up`}
+      style={isMobile ? { bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px) + 12px)' } : undefined}
+    >
       {/* Toast */}
       {toast && (
         <div

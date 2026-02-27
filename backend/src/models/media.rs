@@ -21,6 +21,7 @@ pub struct Media {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct CreateMedia {
     pub note_id: Uuid,
     pub media_type: String,
@@ -35,6 +36,7 @@ pub struct CreateMedia {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PresignRequest {
     pub filename: String,
     pub content_type: String,
@@ -42,6 +44,7 @@ pub struct PresignRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 pub struct PresignResponse {
     pub upload_url: String,
     pub s3_key: String,

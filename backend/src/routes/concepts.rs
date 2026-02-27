@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{delete, get, put},
+    routing::get,
     Json, Router,
 };
 use sqlx::PgPool;

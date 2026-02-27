@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct Tag {
     pub id: Uuid,
     pub workspace_id: Uuid,
@@ -18,6 +19,7 @@ pub struct TagWithCount {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct CreateTag {
     pub name: String,
 }
