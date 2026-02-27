@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useNoteCounts } from '../../hooks/useNotes';
 import { useFieldTrips, useCreateFieldTrip, useDeleteFieldTrip } from '../../hooks/useFieldTrips';
 import { useConcepts, useCreateConcept, useDeleteConcept } from '../../hooks/useConcepts';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 import SyncStatus from '../ui/SyncStatus';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
   const [conceptFormOpen, setConceptFormOpen] = useState(false);
   const [conceptName, setConceptName] = useState('');
   const conceptInputRef = useRef<HTMLInputElement>(null);
-
+  const isMobile = useIsMobile();
 
   const handleSearch = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +109,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
+      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-5 select-none">
         {/* Workspace */}
         <section>
           <h3 className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted px-2 mb-2">
@@ -187,6 +188,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
                   setSidebarFilter({ type: 'all' });
                 }
               }}
+              isMobile={isMobile}
             />
           ))}
 
@@ -251,6 +253,7 @@ export function SidebarContent({ onItemClick }: SidebarContentProps) {
                   setSidebarFilter({ type: 'all' });
                 }
               }}
+              isMobile={isMobile}
             />
           ))}
 
@@ -411,6 +414,7 @@ function SidebarItemWithDelete({
   active,
   onClick,
   onDelete,
+  isMobile,
 }: {
   icon: string;
   label: string;
@@ -418,14 +422,30 @@ function SidebarItemWithDelete({
   active: boolean;
   onClick: () => void;
   onDelete: () => void;
+  isMobile: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const showDelete = isMobile || hovered;
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isMobile && !confirmDelete) {
+      // First tap shows confirm state; auto-resets after 2s
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 2000);
+      return;
+    }
+    onDelete();
+    setConfirmDelete(false);
+  };
 
   return (
     <div
       className="relative group"
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setConfirmDelete(false); }}
     >
       <button
         onClick={onClick}
@@ -449,16 +469,17 @@ function SidebarItemWithDelete({
           </span>
         )}
       </button>
-      {/* Delete button — visible on hover */}
-      {hovered && (
+      {/* Delete button — visible on hover (desktop) or always (mobile) */}
+      {showDelete && (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
-            rounded text-ink-ghost hover:text-coral hover:bg-coral/10 transition-all cursor-pointer text-[11px]"
-          title="Delete"
+          onClick={handleDelete}
+          className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+            rounded transition-all cursor-pointer text-[11px]
+            ${confirmDelete
+              ? 'text-white bg-coral'
+              : 'text-ink-ghost hover:text-coral hover:bg-coral/10'
+            }`}
+          title={confirmDelete ? 'Tap again to confirm' : 'Delete'}
         >
           ✕
         </button>
